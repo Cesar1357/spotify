@@ -1,15 +1,15 @@
 import NetInfo from '@react-native-community/netinfo';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
-  FlatList,
-  Image,
-  StyleSheet,
-  Text,
-  TextInput,
-  ToastAndroid,
-  TouchableOpacity,
-  View,
+    Alert,
+    FlatList,
+    Image,
+    StyleSheet,
+    Text,
+    TextInput,
+    ToastAndroid,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { Icon } from 'react-native-elements';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -38,31 +38,39 @@ export default function Biblioteca() {
 
 
   useEffect(() => {
+    let unsubscribe;
+
     const checkInternetConnection = async () => {
+      if (!uid) return;
       const state = await NetInfo.fetch();
-        if (state.isConnected) {
-          getTransactions();
-          getUser();
-        }else{
-          setInternet(false)
-        }
+      if (state.isConnected) {
+        unsubscribe = getTransactions();
+        getUser();
+      } else {
+        setInternet(false);
+      }
     }
-    checkInternetConnection()
+
+    checkInternetConnection();
+
+    return () => {
+      unsubscribe?.();
+    };
   }, [uid]);
 
 const getUser = async() => {
+    if (!uid) return;
     const docRef = doc(db, "people", uid);
-    const docSnap = await getDoc(docRef); 
-    setUser(docSnap.data())
+    const docSnap = await getDoc(docRef);
+    setUser(docSnap.data());
   }
   
-  const getTransactions = async() => {
+  const getTransactions = () => {
+    if (!uid) return undefined;
     const q = query(collection(db, "people", uid, "playlists"), orderBy('importance', 'desc'));
-    setLists([{"name":"Descargas"}])
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+    return onSnapshot(q, (querySnapshot) => {
       const data = querySnapshot.docs.map(doc => doc.data());
-      const todo = lists.concat(data)
-      setLists(todo);
+      setLists([{ name: "Descargas" }, ...data]);
     });
 }
 

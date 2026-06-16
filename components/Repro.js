@@ -32,7 +32,7 @@ export default function Repro() {
   const [user, setUser] = useState([]);
 
   const [dominantColor, setDominantColor] = useState("#404040")
-  const { qplaylist, icon, setIcon, musica, setMusica, colorA, setColorA, uid, setUid, estado, setEstado, estado2, setEstado2, modoReproduccion, currentTrack, setCurrentTrack, currentIndexRef, setCurrentIndex, reproduciendoD, setReproduciendoD, setAdT, setIsVideoReady } = useApp();
+  const { qplaylist, icon, setIcon, musica, setMusica, colorA, setColorA, uid, setUid, estado, setEstado, estado2, setEstado2, setModoReproduccion ,modoReproduccion, currentTrack, setCurrentTrack, currentIndexRef, setCurrentIndex, reproduciendoD, setReproduciendoD, setAdT, setIsVideoReady, singleLoop } = useApp();
   const [playing, setPlaying] = useState(null);
   const { position, duration } = useProgress(1000); // actualiza cada 1000ms
   const [progress, setProgress] = useState(0);
@@ -85,19 +85,7 @@ export default function Repro() {
         }
         lastUpdateTimeRef.current = date;
 
-        console.log("actualizando reproducciones en Repro ya seguro", "qplay:",qplaylist)
-        const ref = doc(db, "people", uid,"playlists",qplaylist,"Likes",name);
-          updateDoc(ref, {
-            popularity:increment(1)
-          }).then(() => {
-            console.log('Actualización exitosa de Repro:', name);
-          })
-          .catch((error) => {
-            console.error('Error al actualizar:', error);
-          });
-          
-    
-          const historyARef = doc(db, "people", uid, "historyA", date);
+        const historyARef = doc(db, "people", uid, "historyA", date);
           setDoc(historyARef,{
             dateU:Timestamp.now().toDate(),
             dateS:date,
@@ -109,7 +97,29 @@ export default function Repro() {
             letra:letra1,
             dominantColor:dominant1,
             tipo:"Canción",
+          }).then(() => {
+            console.log('Reproducción guardada en historyA:', name);
           })
+
+        console.log("actualizando reproducciones en Repro ya seguro", "qplay:",qplaylist)
+        try{
+          if(qplaylist.length < 28 ){
+            const ref = doc(db, "people", uid,"playlists",qplaylist,"Likes",name);
+              updateDoc(ref, {
+                popularity:increment(1)
+              }).then(() => {
+                console.log('Actualización exitosa de Repro:', name);
+              })
+              .catch((error) => {
+                console.error('Error al actualizar:', error);
+              });
+            }
+          }catch(err){
+            console.log("no se pudo actualizar la popularidad en Repro, probablemente no exista la canción en Likes", err)
+          }
+          
+    
+          
         }catch(err){
           console.log(err)
         }
@@ -187,33 +197,34 @@ export default function Repro() {
         setIcon('play');
       }
       if (state === State.Ended) {
-        console.log("endedRepro",modoReproduccion);
+        console.log("endedRepro", modoReproduccion, "singleLoop:", singleLoop);
         setAdT(false);
-        switch (modoReproduccion) {
-          case 0:
-            await TrackPlayer.reset();
-            setEstado(false);
-            console.log("0");
-            break;
+        if (singleLoop) {
+          // Force repeat current
+          await TrackPlayer.seekTo(0);
+          await TrackPlayer.play();
+        } else {
+          switch (modoReproduccion) {
+            case 0:
+              await TrackPlayer.reset();
+              setEstado(false);
+              setIcon('play');
+              console.log("0");
+              break;
 
-          case 1:
-            console.log("1");
-            playAd();
-            break;
+            case 1:
+            case 2:
+              // La cola ya tiene las canciones cargadas en modo orden o aleatorio.
+              // No hacemos nada especial aquí para dejar que la siguiente pista se reproduzca.
+              console.log("1/2 - cola secuencial o aleatoria");
+              break;
 
-          case 2:
-            console.log("2");
-            playAd();
-            break;
-
-          case 3:
-            console.log("3");
-            const currTrackId = await TrackPlayer.getActiveTrackIndex();
-            if (currTrackId) {
+            case 3:
+              console.log("3");
               await TrackPlayer.seekTo(0);
               await TrackPlayer.play();
-            }
-            break;
+              break;
+          }
         }
       }
 
@@ -239,14 +250,50 @@ export default function Repro() {
 }, [estado,modoReproduccion,reproduciendoD, pathname, lastUpdateTimeRef, lastUpdatedRef]);
 
 const _playAndPause = async () => {
-    if (estado2 === State.Playing) {
-      setIcon('play');
-      await TrackPlayer.pause();
-    } else if (estado2 === State.Paused || estado2 === State.Ready || estado2 === State.Stopped) {
+    try {
+      const currentTrackId = await TrackPlayer.getCurrentTrack();
+      if (currentTrackId !== null) {
+        if (estado2 === State.Playing) {
+          setIcon('play');
+          await TrackPlayer.pause();
+        } else if (estado2 === State.Paused || estado2 === State.Ready || estado2 === State.Stopped) {
+          setIcon('pause');
+          await TrackPlayer.play();
+        }
+        return;
+      }
+
+      if (!playlistSongs || playlistSongs.length === 0) {
+        ToastAndroid.showWithGravity('No hay canciones disponibles para reproducir', ToastAndroid.SHORT, ToastAndroid.BOTTOM);
+        return;
+      }
+
+      // build queue according to modoReproduccion
+      const buildQueue = () => {
+        if (modoReproduccion === 3) return []; // loop current
+        if (modoReproduccion === 2) return shufflePlaylist(playlistSongs);
+        if (modoReproduccion === 0) return [playlistSongs[0]];
+        // modo 1 ordered
+        return playlistSongs;
+      };
+
+      const shufflePlaylist = (pl) => {
+        const copy = [...pl];
+        for (let i = copy.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [copy[i], copy[j]] = [copy[j], copy[i]];
+        }
+        return copy;
+      };
+
+      const queue = buildQueue();
+      await TrackPlayer.reset();
+      if (queue.length > 0) await TrackPlayer.add(queue);
       setIcon('pause');
       await TrackPlayer.play();
+    } catch (err) {
+      console.error(err);
     }
-
     console.log('Estado actual:', estado2);
   };
 
@@ -260,9 +307,9 @@ const _playAndPause = async () => {
       setDominantColor("#404040");
     }
     try {
-      var qplay = pathname
-      console.log("qplay: ",qplay)
-      const playlistDocRef = doc(db, 'people', uid, 'playlists', qplaylist , 'Likes', musica[0]);
+      var qplay = qplaylist.length < 28 ? qplaylist : "Likes";
+      console.log("qplay: ",qplay, qplaylist);
+      const playlistDocRef = doc(db, 'people', uid, 'playlists', qplay , 'Likes', musica[0]);
       unsubscribe = onSnapshot(playlistDocRef, (snapshot) => {
         setIconLC(snapshot.exists() ? "green" : "white");
       });
@@ -311,6 +358,7 @@ const _playAndPause = async () => {
   },[uid])
 
   const like = () => {
+    var qplay = qplaylist.length < 28 ? qplaylist : "Likes";
     console.log("||",uid)
     if(!currentTrack.isAd){
       try{
@@ -326,7 +374,7 @@ const _playAndPause = async () => {
         }
           if(iconLC === "white"){
               setIconLC("green")
-              const historyRef = doc(db, "people", uid, "playlists", qplaylist,"Likes",currentTrack.title);
+              const historyRef = doc(db, "people", uid, "playlists", qplay,"Likes",currentTrack.title);
               setDoc(historyRef,{
                 name:currentTrack.title,
                 uri:currentTrack.url,  
@@ -341,7 +389,7 @@ const _playAndPause = async () => {
               })     
           }else{
             setIconLC("white")
-            const historyRef = doc(db, "people", uid, "playlists", qplaylist,"Likes",currentTrack.title);
+            const historyRef = doc(db, "people", uid, "playlists", qplay,"Likes",currentTrack.title);
             deleteDoc(historyRef) 
           }
         }catch(err){
@@ -402,6 +450,7 @@ const _playAndPause = async () => {
     setAdT(false);
     currentIndexRef.current = -1;
     setCurrentIndex(0);
+    setModoReproduccion(0);
   };
   
   if(estado){

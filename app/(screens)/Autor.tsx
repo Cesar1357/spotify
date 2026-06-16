@@ -6,6 +6,7 @@ import {
   AppState,
   FlatList,
   Linking,
+  ListRenderItem,
   StyleSheet,
   Text,
   ToastAndroid,
@@ -42,32 +43,35 @@ import { BottomSheetView } from '@gorhom/bottom-sheet';
 import { db } from '../../config/firebase';
 import { useApp } from '../../context/AppContext';
 
+type Artista = { uri: string; name: string; descripcion: string };
+
 export default function Search() {
-  const [artista, setArtista] = useState([{"uri":"https://s1.ppllstatics.com/canarias7/www/multimedia/201704/14/media/cortadas/462076-1g_CSN462076_MG3928385--1248x702.jpg","name":"", "descripcion":""}]);
-  const [songs, setSongs] = useState([]);
-  const [allSee, setAllSee] = useState([])
+  const [artista, setArtista] = useState<Artista>({ uri: 'https://s1.ppllstatics.com/canarias7/www/multimedia/201704/14/media/cortadas/462076-1g_CSN462076_MG3928385--1248x702.jpg', name: '', descripcion: '' });
+  const [songs, setSongs] = useState<any[]>([]);
+  const [allSee, setAllSee] = useState<any[]>([])
   
   const appState = useRef(AppState.currentState);
   const [appStateVisible, setAppStateVisible] = useState(appState.current);
 
-  const [actualS2, setActualS2] = useState({});
+  const [actualS2, setActualS2] = useState<any>({});
   const [visibleP, setVisibleP] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
 
-  const [allPlaylists, setAllPlaylists] = useState([]);
+  const [allPlaylists, setAllPlaylists] = useState<any[]>([]);
 
 
-  const [index, setIndex] = useState();
-  const [allTransactionsS,setAllTransactionsS] = useState([])
+  const [index, setIndex] = useState<number | undefined>(undefined);
+  const [allTransactionsS,setAllTransactionsS] = useState<any[]>([])
   const showMiniHeader = useSharedValue(0); // 0 = oculto, 1 = visible
   const [actualizado, setActualizado] = useState(false);
   const [textB, setTextB] = useState("")
   const [kActive, setKActive] = useState(false);
-  const searchRef = useRef(null);
+  const searchRef = useRef<any>(null);
   let numerosSeleccionados = [];
   const [visible, setVisible] = useState(false);
-  const { icon, setIcon, musica, setMusica, colorA, setColorA, playlistSongs, setPlaylistSongs, estado2, modoReproduccion, setModoReproduccion, currentIndexRef, currentTrack, setCurrentTrack, setCurrentIndex, reproduciendoD, setReproduciendoD } = useApp();
-  const { uid, loading } = useAuth();
+  const { icon, setIcon, musica, setMusica, colorA, setColorA, playlistSongs, setPlaylistSongs, estado2, setEstado, modoReproduccion, setModoReproduccion, currentIndexRef, currentTrack, setCurrentTrack, setCurrentIndex, reproduciendoD, setReproduciendoD } = useApp();
+  const { user, uid, loading } = useAuth() as any;
+  const userAny = user as any;
   const { nameA } = useLocalSearchParams();
 
   const modalRef = useRef<BottomSheetModal>(null);
@@ -78,7 +82,7 @@ export default function Search() {
   const snapPoints2 = useMemo(() => ['100%', '100%'], []);
   const snapPoints3 = useMemo(() => ['30%', '40%'], []);
 
-  const Option = ({ icon, label, onPress }) => (
+  const Option: React.FC<{ icon: string; label: string; onPress: () => void }> = ({ icon, label, onPress }) => (
     <TouchableOpacity style={styles.option} onPress={onPress}>
       <Icon type="ionicon" name={icon} color="gray" size={30} />
       <Text style={styles.optionText}>{label}</Text>
@@ -127,17 +131,18 @@ export default function Search() {
   };
 });
   
-  const getAutors =async () => {
-    const docRef = doc(db, "autores", nameA);
+
+  const getAutors = async () => {
+    const docRef = doc(db, "autores", String(nameA));
     const docSnap = await getDoc(docRef);
-    const info = docSnap.data()
-    if(!info){
-      setArtista({"uri":"https://s1.ppllstatics.com/canarias7/www/multimedia/201704/14/media/cortadas/462076-1g_CSN462076_MG3928385--1248x702.jpg","name":nameA,"descripcion":"No se encontró información sobre este artista"});
+    const info = docSnap.data();
+    if (!info) {
+      setArtista({ uri: 'https://s1.ppllstatics.com/canarias7/www/multimedia/201704/14/media/cortadas/462076-1g_CSN462076_MG3928385--1248x702.jpg', name: String(nameA), descripcion: 'No se encontró información sobre este artista' });
       Alert.alert("No se encontró este artista","¿Quieres buscarlo en la web?", [
         {
           text: 'Si',
           onPress: () => {
-            openLink(nameA);
+            openLink(String(nameA));
           },
         },{
           text: 'No',
@@ -146,12 +151,16 @@ export default function Search() {
         }],{cancelable: true})
       return;
     }
-    setArtista(info);
+    setArtista({
+      uri: String(info?.uri ?? artista.uri),
+      name: String(info?.name ?? nameA),
+      descripcion: String(info?.descripcion ?? ''),
+    });
 
   };
 
-  const openLink = (nameA) => {
-    const url = `https://www.google.com/search?q=${nameA}`;
+  const openLink = (searchText: string) => {
+    const url = `https://www.google.com/search?q=${searchText}`;
     Linking.openURL(url).catch((err) => {
       console.error('Error al abrir el enlace:', err);
       ToastAndroid.showWithGravity(
@@ -162,7 +171,7 @@ export default function Search() {
     });
   };
 
-  const obtener = async(si) => {
+  const obtener = async (si: boolean = false) => {
     try {
       // Cargar la colección desde AsyncStorage
       const coleccionGuardada = await AsyncStorage.getItem("descargas");
@@ -176,19 +185,19 @@ export default function Search() {
   }
 
   const getPlaylists = () => {
-    const q = query(collection(db, 'people',uid,"playlists"),orderBy('importance', 'desc'));
+    const q = query(collection(db, 'people',String(uid),"playlists"),orderBy('importance', 'desc'));
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const docs = querySnapshot.docs.map((doc) => doc.data());
+      const docs = querySnapshot.docs.map((doc) => doc.data() as any);
       setAllPlaylists(docs)
     }); 
 }
 
   const getTransactionsP = async() => {
-      const q = query(collection(db, "musica",), where("autor","==",nameA));
+      const q = query(collection(db, "musica"), where("autor","==", String(nameA)));
       const docs = await getDocs(q);
-      const data = docs.docs.map(doc => doc.data());
+      const data = docs.docs.map(doc => doc.data() as any);
       setSongs(data);
-      setAllSee(data); 
+      setAllSee(data);
 }
 
 const deletC = async () => {
@@ -290,69 +299,72 @@ useEffect(() => {
     };
   }, []);
   
-  useEffect(() => {
-    if(allSee){
-        const playlist = allSee.map((item, index) => ({
-          id: index,
-          url: Array.isArray(item.uri)?item.uri[0]:item.uri,
-          vid: Array.isArray(item.uri)?item.uri[1]:null,
-          title: item.name,
-          artist: item.autor,
-          artwork: item.img,
-          dominantColor:item.dominantColor,
-          generos:item.generos,
-          letra:item.letra,
-          qplaylist: nameA,
-          donde: nameA
-        }));
-        setPlaylistSongs(playlist)
+
+  const shufflePlaylist = (playlist: any[]) => {
+    const copy = [...playlist];
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
     }
-  }, [allSee]);
+    return copy;
+  };
 
-  const loadPlaylist = async (playlist, shuffle = 0) => {
+  const buildPlaylistQueue = (playlist: any[], mode: number, currentTrackObject: any) => {
+    if (!Array.isArray(playlist) || playlist.length === 0) return [];
+    const activeIndex = currentTrackObject
+      ? playlist.findIndex((item) => item.id === currentTrackObject.id || item.title === currentTrackObject.title || item.name === currentTrackObject.title)
+      : -1;
+
+    if (mode === 3) return currentTrackObject ? [] : [playlist[0]];
+    if (mode === 2) return shufflePlaylist(playlist.filter((_, idx) => idx !== activeIndex));
+    if (mode === 0) return currentTrackObject ? [] : [playlist[0]];
+    return activeIndex >= 0 ? playlist.slice(activeIndex + 1) : playlist;
+  };
+
+  const loadPlaylist = async (playlist: any[], mode = 0, preserveCurrent = false) => {
+    if (!Array.isArray(playlist) || playlist.length === 0) return;
+    const currentTrackId = await TrackPlayer.getCurrentTrack();
+    const isPlayingTrackLoaded = currentTrackId !== null;
+    const queue = buildPlaylistQueue(playlist, mode, isPlayingTrackLoaded ? currentTrack : null);
+
+    if (isPlayingTrackLoaded && preserveCurrent) {
       await TrackPlayer.removeUpcomingTracks();
-  
-      const finalPlaylist = shuffle === 2
-        ? [...playlist].sort(() => Math.random() - 0.5)
-        : playlist;
-      console.log("cargadas")
-      await TrackPlayer.add(finalPlaylist);
-    };
-
-  const _playAndPause =async () => {
-    try {
-      var track = await TrackPlayer.getCurrentTrack()
-      if(track !== null){
-        console.log("pl1");
-        if (estado2 === State.Playing) {
-          setIcon('play');
-          await TrackPlayer.pause();
-        } else if (estado2 === State.Paused || estado2 === State.Ready || estado2 === State.Stopped) {
-          setIcon('pause');
-          await TrackPlayer.play();
-        }
-      }else{
-        console.log("pl2");
-        setModoReproduccion(2);
-        await loadPlaylist(playlistSongs, 2);
-        TrackPlayer.play();
-        ToastAndroid.showWithGravity(
-        "Reproducción automática aleatoria activada",
-        ToastAndroid.SHORT,
-        ToastAndroid.BOTTOM // Cambiado a la parte inferior de la pantalla
-        );
-      }
-    } catch (error) {
-      console.error('Error al reproducir o pausar la canción:', error);
-      ToastAndroid.showWithGravity(
-        "Error al reproducir o pausar la canción",
-        ToastAndroid.SHORT,
-        ToastAndroid.BOTTOM // Cambiado a la parte inferior de la pantalla
-      );
+      if (queue.length > 0) await TrackPlayer.add(queue);
+    } else {
+      await TrackPlayer.reset();
+      if (queue.length > 0) await TrackPlayer.add(queue);
     }
   };
 
-  const renderPlaylist = ({ item, i }) => {
+  const _playAndPause = async () => {
+    try {
+      const currentTrackId = await TrackPlayer.getCurrentTrack();
+      if (currentTrackId !== null) {
+        if (estado2 === State.Playing) {
+          setIcon('play');
+          await TrackPlayer.pause();
+        } else {
+          setIcon('pause');
+          await TrackPlayer.play();
+        }
+        return;
+      }
+
+      if (!playlistSongs || playlistSongs.length === 0) {
+        ToastAndroid.showWithGravity('No hay canciones disponibles para reproducir', ToastAndroid.SHORT, ToastAndroid.BOTTOM);
+        return;
+      }
+
+      await loadPlaylist(playlistSongs, modoReproduccion, false);
+      setIcon('pause');
+      await TrackPlayer.play();
+    } catch (error) {
+      console.error('Error al reproducir o pausar la canción:', error);
+      ToastAndroid.showWithGravity('Error al reproducir o pausar la canción', ToastAndroid.SHORT, ToastAndroid.BOTTOM);
+    }
+  };
+
+  const renderPlaylist = ({ item }: { item: any }) => {
     try {
     return(
     <TouchableOpacity style={{padding:8,flexDirection:"row"}} onPress={() => getLikesPlaylist(item.name)}>
@@ -387,7 +399,7 @@ useEffect(() => {
   }
 }
 
-  const change = async (uri, name, autor, img, generos,letra,dominant,index) => {  
+  const change = async (uri: any, name: string, autor: string, img: string, generos: any, letra: any, dominant: any, index: number) => {  
       console.log("indice Change",index,"||",currentIndexRef.current)
         if(musica[2] !== "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTkM03yBVebiMnBH5Kn2h3XazhS4sAIxn3w6w&s"){
             try {
@@ -395,52 +407,65 @@ useEffect(() => {
               const nombreArchivo = name+".mp3"
               const rutaLocal = `${FileSystem.documentDirectory}${nombreArchivo}`;
               const fileInfo = await FileSystem.getInfoAsync(rutaLocal);
+              const trackData = {
+                title: name,
+                artist: autor,
+                artwork: img,
+                url: Array.isArray(uri)?uri[0]:uri,
+                vid: Array.isArray(uri)?uri[1]:null,
+                generos,
+                letra,
+                qplaylist: artista.name,
+                donde: "Likes",
+                dominantColor: dominant,
+                isLocal: fileInfo.exists,
+              };
+              setMusica([name,autor,img,uri,generos,letra,artista.name,dominant]);
+              setCurrentTrack(trackData);
+              setEstado(true);
               if (fileInfo.exists) {
                 console.log("ex")
-                setMusica([name,autor,img,uri,generos,letra,artista.name,dominant])
                 await TrackPlayer.load({
                   id: index,
-                  url: Array.isArray(uri)?uri[0]:uri,
-                  vid: Array.isArray(uri)?uri[1]:null,
-                  title: name,
-                  artist: autor,
-                  artwork: img,
-                  dominantColor: dominant,
-                  generos: generos,
-                  letra: letra,
-                  qplaylist:artista.name,
-                  donde:"Likes"
+                  url: rutaLocal,
+                  vid: trackData.vid,
+                  title: trackData.title,
+                  artist: trackData.artist,
+                  artwork: trackData.artwork,
+                  dominantColor: trackData.dominantColor,
+                  generos: trackData.generos,
+                  letra: trackData.letra,
+                  qplaylist: trackData.qplaylist,
+                  donde: trackData.donde,
+                  isLocal: true
                 })
-                await TrackPlayer.play();
               } else {
                 console.log("noex")
-                try {
-                  setMusica([name,autor,img,uri,generos,letra,artista.name,dominant])
-                  await TrackPlayer.load({
+                await TrackPlayer.load({
                   id: index,
-                  url: Array.isArray(uri)?uri[0]:uri,
-                  vid: Array.isArray(uri)?uri[1]:null,
-                  title: name,
-                  artist: autor,
-                  artwork: img,
-                  dominantColor: dominant,
-                  generos: generos,
-                  letra: letra,
-                  qplaylist:artista.name,
-                  donde:"Likes"
+                  url: trackData.url,
+                  vid: trackData.vid,
+                  title: trackData.title,
+                  artist: trackData.artist,
+                  artwork: trackData.artwork,
+                  dominantColor: trackData.dominantColor,
+                  generos: trackData.generos,
+                  letra: trackData.letra,
+                  qplaylist: trackData.qplaylist,
+                  donde: trackData.donde,
+                  isLocal: false
                 })
-                await TrackPlayer.play();
-                } catch (error) {
-                  ToastAndroid.showWithGravity(
-                    "Error al reproducir la canción",
-                    ToastAndroid.SHORT,
-                    ToastAndroid.BOTTOM // Cambiado a la parte inferior de la pantalla
-                  );
-                }
               }
-             currentIndexRef.current = index;
+              await TrackPlayer.play();
+              setIcon('pause');
+              currentIndexRef.current = index;
             } catch (error) {
               console.error('Error al verificar el archivo:', error);
+              ToastAndroid.showWithGravity(
+                "Error al reproducir la canción",
+                ToastAndroid.SHORT,
+                ToastAndroid.BOTTOM
+              );
             }
           }
         };
@@ -459,7 +484,16 @@ useEffect(() => {
     
   };
 
-  const modalT = (uri, name, autor, tipo, img, generos, letra, dominantColor) => {
+  const activateA = () => {
+    setModoReproduccion((prev) => (prev + 1) % 4);
+  };
+
+  const closeModal = () => {
+    setModalVisible(false);
+    modalRef.current?.close();
+  };
+
+  const modalT = (uri: any, name: string, autor: string, tipo: string, img: string, generos: any, letra: any, dominantColor: any) => {
     if(modalVisible === true){
       setModalVisible(false)
       modalRef.current?.close()
@@ -472,12 +506,15 @@ useEffect(() => {
   }
 
 
-  const getLikesPlaylist =async (playlist) => {
-    const q = query(collection(db, "people",auth.currentUser.uid,"playlists",playlist,"Likes"), orderBy('popularity', 'desc'));
+  const getLikesPlaylist = async (playlist: string) => {
+    if (!uid) {
+      return;
+    }
+    const q = query(collection(db, "people", String(uid), "playlists", playlist, "Likes"), orderBy('popularity', 'desc'));
     const docs = await getDocs(q)
     const a = docs.docs.map(doc => doc.data());
 
-    if(user.premium === false){
+    if (!userAny?.premium) {
       if(docs.size < 100){
   
         var searchLike = a.filter((song) => 
@@ -491,7 +528,7 @@ useEffect(() => {
             letra = "";
           }
   
-            const ref = doc(db, "people", auth.currentUser.uid,"playlists",playlist,"Likes",actualS2.name);
+            const ref = doc(db, "people", String(uid), "playlists", playlist, "Likes", actualS2.name);
             await setDoc(ref, {
               name:actualS2.name,
               uri:actualS2.uri,
@@ -540,7 +577,7 @@ useEffect(() => {
             letra = "";
           }
   
-            const ref = doc(db, "people", auth.currentUser.uid,"playlists",playlist,"Likes",actualS2.name);
+            const ref = doc(db, "people", String(uid), "playlists", playlist, "Likes", actualS2.name);
             await setDoc(ref, {
               name:actualS2.name,
               uri:actualS2.uri,
@@ -573,7 +610,7 @@ useEffect(() => {
     };
 
   
-const renderItem = ({ item, i, index }) => {
+const renderItem: ListRenderItem<any> = ({ item, index }) => {
   try{
     var color = "white";
     if(musica[0] === item.name){
@@ -628,7 +665,7 @@ const renderItem = ({ item, i, index }) => {
   };
 }
 
-const getSongs = (text) => {
+const getSongs = (text: string) => {
     console.log(text)
     setTextB(text)
     var a = ""
@@ -694,7 +731,7 @@ const scrollHandler = useAnimatedScrollHandler({
               </Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', paddingRight: 10 }}>
-              <TouchableOpacity style={{marginLeft:10}} onPress={(()=>activateA())}>
+              <TouchableOpacity style={{marginLeft:10}} onPress={() => activateA()}>
                 <Icon type={'ionicon'} name={"repeat"} color={"white"} size={34} />
               </TouchableOpacity>
               <TouchableOpacity style={{}} onPress={(()=>_playAndPause())}>
@@ -726,7 +763,7 @@ const scrollHandler = useAnimatedScrollHandler({
                 onClearIconPress={() => {
                   setTextB("");
                   setAllSee(songs);
-                  searchRef.current.blur(); // Limpiar el campo de búsqueda
+                  searchRef.current?.blur(); // Limpiar el campo de búsqueda
                 }}
             />
           </View>
@@ -835,7 +872,10 @@ const scrollHandler = useAnimatedScrollHandler({
         index={1}
         snapPoints={snapPoints}
         enableDynamicSizing={false}
-        onDismiss={modalT}
+        onDismiss={() => {
+          setModalVisible(false);
+          modalRef.current?.close();
+        }}
         backdropComponent={BottomSheetBackdrop}
         backgroundStyle={{ backgroundColor: '#111' }}
         handleIndicatorStyle={{ backgroundColor: 'gray' }}

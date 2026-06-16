@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Dimensions,
@@ -23,44 +23,35 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 
 import { useAuth } from '@/hooks/useAuth';
-import { collection, doc, getDoc, getDocs, increment, limit, onSnapshot, orderBy, query, startAfter, updateDoc, where } from "firebase/firestore";
+import { useHomeFeed } from '@/hooks/useHomeFeed';
 import TrackPlayer from 'react-native-track-player';
 
-import { db } from '../../config/firebase';
 import { useApp } from '../../context/AppContext';
 
-function delay(n){
-    return new Promise(function(resolve){
-        setTimeout(resolve,n*1000);
-    });
-}
-
 export default function HomeScreen() {
-  const [allTransactionsP, setAllTransactionsP] = useState([]);
-  const [allTransactionsN, setAllTransactionsN] = useState([]);
-  const [allTransactionsL, setAllTransactionsL] = useState([]); 
-  const [allTransactionsPop, setAllTransactionsPop] = useState([]);
-  const [allTransactionsAmbient, setAllTransactionsAmbient] = useState([]);
-  const [allTransactionsDreamcore, setAllTransactionsDreamcore] = useState([]);
+  const [allTransactionsP, setAllTransactionsP] = useState<any[]>([]);
+  const [allTransactionsN, setAllTransactionsN] = useState<any[]>([]);
+  const [allTransactionsL, setAllTransactionsL] = useState<any[]>([]); 
+  const [allTransactionsPop, setAllTransactionsPop] = useState<any[]>([]);
+  const [allTransactionsAmbient, setAllTransactionsAmbient] = useState<any[]>([]);
+  const [allTransactionsDreamcore, setAllTransactionsDreamcore] = useState<any[]>([]);
 
-  const [allTransactionsPlaylistsO, setAllTransactionsPlaylistsO] = useState([]); 
-  const [allTransactionsArtistas, setAllTransactionsArtistas] = useState([])
-  const [allTransactionsArtistas2, setAllTransactionsArtistas2] = useState([])
+  const [allTransactionsPlaylistsO, setAllTransactionsPlaylistsO] = useState<any[]>([]); 
+  const [allTransactionsArtistas, setAllTransactionsArtistas] = useState<any[]>([])
+  const [allTransactionsArtistas2, setAllTransactionsArtistas2] = useState<any[]>([])
   
-  const [playlists3,setPlaylists3] = useState([]);
-  const [lastS3,setLastS3] = useState([]);
+  const [playlists3,setPlaylists3] = useState<any[]>([]);
+  const [lastS3,setLastS3] = useState<any[]>([]);
   const { loadAds, playAd } = useAds();
 
   const [iconLC, setIconLC] = useState("white"); 
 
   const { icon, setIcon, musica, setMusica, colorA, setColorA, setUid, currentTrack, setCurrentTrack, lastRouteRef, user, setUser } = useApp();
-
-  var generos = [];
-  const [dondeP, setDondeP] = useState();
-  const [dondeN, setDondeN] = useState();
-  const [dondePop, setDondePop] = useState();
-  const [dondeAmbient, setDondeAmbient] = useState();
-  const [dondeDreamcore, setDondeDreamcore] = useState();
+  const [dondeP, setDondeP] = useState<any | null>(null);
+  const [dondeN, setDondeN] = useState<any | null>(null);
+  const [dondePop, setDondePop] = useState<any | null>(null);
+  const [dondeAmbient, setDondeAmbient] = useState<any | null>(null);
+  const [dondeDreamcore, setDondeDreamcore] = useState<any | null>(null);
   
   const [state, setState] = useState("si")
   var dimen = Dimensions.get("window")
@@ -69,6 +60,61 @@ export default function HomeScreen() {
 
   const [isReady, setIsReady] = useState(false);
   const { uid, loading } = useAuth();
+  const adsLoadedRef = useRef(false);
+
+  const homeFeedSetters = useMemo(
+    () => ({
+      setUser,
+      setColorA,
+      setAllTransactionsP,
+      setAllTransactionsN,
+      setAllTransactionsL,
+      setAllTransactionsPop,
+      setAllTransactionsAmbient,
+      setAllTransactionsDreamcore,
+      setAllTransactionsPlaylistsO,
+      setPlaylists3,
+      setLastS3,
+      setAllTransactionsArtistas,
+      setAllTransactionsArtistas2,
+      setDondeP,
+      setDondeN,
+      setDondePop,
+      setDondeAmbient,
+      setDondeDreamcore,
+    }),
+    [
+      setUser,
+      setColorA,
+      setAllTransactionsP,
+      setAllTransactionsN,
+      setAllTransactionsL,
+      setAllTransactionsPop,
+      setAllTransactionsAmbient,
+      setAllTransactionsDreamcore,
+      setAllTransactionsPlaylistsO,
+      setPlaylists3,
+      setLastS3,
+      setAllTransactionsArtistas,
+      setAllTransactionsArtistas2,
+      setDondeP,
+      setDondeN,
+      setDondePop,
+      setDondeAmbient,
+      setDondeDreamcore,
+    ],
+  );
+
+  const homeFeed = useHomeFeed(uid, homeFeedSetters);
+
+  const {
+    fetchUser,
+    refreshFeed,
+    fetchMoreTransactionsP,
+    fetchMoreTransactionsN,
+    fetchMoreGenreSection,
+    updatePlaylistPopularity,
+  } = homeFeed;
   
   useEffect(() => {
     console.log("tabs")
@@ -78,301 +124,42 @@ export default function HomeScreen() {
   useEffect(() => { 
     setUid(uid);
     const checkInternetConnection = async () => {
-
-      const state = await NetInfo.fetch();
-        if (state.isConnected) {
-          loadAds();
-          getUser(); 
-          getPlaylists();
-          getLSongs();
-          getTransactionsP();
-          getTransactionsN();
-          getPop();
-          getAmbient();
-          getDreamcore();
-          getTransactionsArtistas();
-          getPlaylistsOthers();
-        }else{
-          setState("no")
-        } 
-    }
-    checkInternetConnection()
-  }, [loading,uid]);
-
-
-  const getUser =async () => {
-    const docRef = doc(db, "people", uid);
-    const docSnap = await getDoc(docRef);
-    const info = docSnap.data()
-    setUser(info)
-    getTransactions(info); 
-    setColorA(info.colorA)
-  }
-
-const getPlaylistsOthers = async() => { 
-    const q = query(collection(db, "playlists"), orderBy('popularity', 'desc'));
-    const docs = await getDocs(q);
-    const canciones = docs.docs.map(doc => doc.data());
-    
-    var result = []
-    for (let i = 0; i < canciones.length; i += 2) {
-        result.push(canciones.slice(i, i + 2));
-    }
-    setAllTransactionsPlaylistsO(result)
-  };
-
-
-  const getTransactions = (info) => {
-    generos = [];
-
-    const q = query(collection(db, "people",uid,"playlists","Likes","Likes"));
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const data = querySnapshot.docs.map(doc => doc.data());
-      var ee = [];
-      data.map((e)=>{
-        var a = e.generos
-        var a2 = ee.concat(a)
-        ee = a2
-      })
-      ee.map((a)=>{
-        var si = generos.includes(a)  
-        if(si === false){
-          if(a !== undefined){
-            var t = generos.concat(a)
-            generos = t;
-          } 
+      const netState = await NetInfo.fetch();
+      if (netState.isConnected) {
+        if (!adsLoadedRef.current) {
+          await loadAds();
+          adsLoadedRef.current = true;
         }
-      })  
-      getTransactionsL(data,info);
-    });
-}
-
-const getTransactionsL =async (likess,info) => {
-   var count;
-   if(info){
-     if(info.premium === true){ 
-      count = 5;
-    }else{
-      count = 2; 
+        fetchUser();
+        refreshFeed();
+      } else {
+        setState("no")
+      }
     }
-   }
-
-  var generosr = []
-  var generosr2 = []
-  var te = []
-  generosr = generos.slice(0,10)
-  generosr2 = generos.slice(10,20);
-
-if(generosr){
-  const q = query(collection(db, "musica"), where('generos','array-contains-any', generosr) );
-  const querySnapshot = await getDocs(q);
-  const cancionsi = querySnapshot.docs.map(doc => doc.data());
-      likess.map((a)=>{
-        cancionsi.map((e)=>{
-            if(a.name !== e.name){
-                const result = likess.find(({ name }) => name === e.name);
-                if(result === undefined){
-                  var si = te.find(({ name }) => name === e.name);
-                  if(si === undefined){
-                    if(te.length < count){
-                      te.push(e)
-                    }
-                    
-                  }          
-                } 
-            }
-                 
-        })
-      })   
-} 
-await delay(0.4)
-
-var t = [];
-  if(generosr2){
-    const q = query(collection(db, "musica"), where('generos','array-contains-any', generosr) );
-    const querySnapshot = await getDocs(q);
-    const cancionsi = querySnapshot.docs.map(doc => doc.data());
-
-      likess.map((a)=>{
-        cancionsi.map((e)=>{
-            if(a.name !== e.name){
-                const result = te.find(({ name }) => name === e.name);
-                if(result === undefined){
-                  const result2 = likess.find(({ name }) => name === e.name);
-                  if(result2 === undefined){
-                    var si = t.find(({ name }) => name === e.name);
-                    if(si === undefined){
-                      if(t.length < count){
-                        t.push(e)
-                      }
-                    }  
-                  }        
-                } 
-            }
-                 
-        })
-      })
-  }
-  await delay(0.4)
-
-  var todo = te.concat(t)
-  setAllTransactionsL(todo)
-
-  
-}
-
-  const getTransactionsP =async () => {
-    const q = query(collection(db, "musica"), orderBy('popularity', 'desc'),limit(5));
-    const querySnapshot = await getDocs(q);
-    const data = querySnapshot.docs.map(doc => doc.data());
-    setAllTransactionsP(data);
-    setDondeP(querySnapshot.docs[querySnapshot.docs.length - 1]);
-}
-
-const getMoreTransactionsP =async () => {
-  if(user.premium === true){
-    if(allTransactionsP.length < 14){
-      const q = query(collection(db, "musica"), orderBy('popularity', 'desc'),startAfter(dondeP),limit(3));
-      const querySnapshot = await getDocs(q);
-      const data = querySnapshot.docs.map(doc => doc.data());
-      var todo = allTransactionsP.concat(data)
-      setAllTransactionsP(todo);
-      setDondeP(querySnapshot.docs[querySnapshot.docs.length - 1]);
+    if (!loading) {
+      checkInternetConnection();
     }
-  } 
-}
+  }, [loading, uid, loadAds, fetchUser, refreshFeed]);
 
 
- const getTransactionsN = async() => {
-  const q = query(collection(db, "musica"), orderBy('dateU', 'desc'),limit(5));
-  const querySnapshot = await getDocs(q);
-  const data = querySnapshot.docs.map(doc => doc.data());
-  setAllTransactionsN(data);
-  setDondeN(querySnapshot.docs[querySnapshot.docs.length - 1]);
-}
-
-const getMoreTransactionsN =async () => { 
-  if(user.premium === true){
-    if(allTransactionsN.length < 14){
-      const q = query(collection(db, "musica"), orderBy('dateU', 'desc'),startAfter(dondeN),limit(3));
-      const querySnapshot = await getDocs(q);
-      const data = querySnapshot.docs.map(doc => doc.data());
-      var todo = allTransactionsN.concat(data)
-      setAllTransactionsN(todo);
-      setDondeN(querySnapshot.docs[querySnapshot.docs.length - 1]);
-    }
-  }  
-}
-
- const getPop =async () => { 
-  const q = query(collection(db, "musica"), where('generos','array-contains', "pop"),limit(5));
-  const querySnapshot = await getDocs(q);
-  const data = querySnapshot.docs.map(doc => doc.data());
-  setAllTransactionsPop(data);
-  setDondePop(querySnapshot.docs[querySnapshot.docs.length - 1]);
-}
-
-const getMorePop =async () => {  
-  if(user.premium === true){
-    if(allTransactionsPop.length < 14){
-      const q = query(collection(db, "musica"), where('generos','array-contains', "pop"),startAfter(dondePop),limit(3));
-      const querySnapshot = await getDocs(q);
-      const data = querySnapshot.docs.map(doc => doc.data());
-      var todo = allTransactionsPop.concat(data)
-      setAllTransactionsPop(todo);
-      setDondePop(querySnapshot.docs[querySnapshot.docs.length - 1]);
-    }
-  }  
-}
-
- const getAmbient =async () => { 
-    const q = query(collection(db, "musica"), where('generos','array-contains', "ambient"),limit(5));
-    const querySnapshot = await getDocs(q);
-    const data = querySnapshot.docs.map(doc => doc.data());
-    setAllTransactionsAmbient(data);
-    setDondeAmbient(querySnapshot.docs[querySnapshot.docs.length - 1]);
-}
-
-const getMoreAmbient =async () => {  
-  if(user.premium === true){
-    if(allTransactionsAmbient.length < 14){
-      const q = query(collection(db, "musica"), where('generos','array-contains', "ambient"),startAfter(dondeAmbient),limit(3));
-      const querySnapshot = await getDocs(q);
-      const data = querySnapshot.docs.map(doc => doc.data());
-      var todo = allTransactionsAmbient.concat(data)
-      setAllTransactionsAmbient(todo);
-      setDondeAmbient(querySnapshot.docs[querySnapshot.docs.length - 1]);
-    }
-  }  
-}
-
-const getDreamcore =async () => { 
-  const q = query(collection(db, "musica"), where('generos','array-contains', "dreamcore"),limit(5));
-  const querySnapshot = await getDocs(q);
-  const data = querySnapshot.docs.map(doc => doc.data());
-  setAllTransactionsDreamcore(data);
-  setDondeDreamcore(querySnapshot.docs[querySnapshot.docs.length - 1]);
-}
-
-const getMoreDreamcore =async () => {  
-if(user.premium === true){
-  if(allTransactionsDreamcore.length < 14){
-    const q = query(collection(db, "musica"), where('generos','array-contains', "dreamcore"),startAfter(dondeDreamcore),limit(3));
-    const querySnapshot = await getDocs(q);
-    const data = querySnapshot.docs.map(doc => doc.data());
-    var todo = allTransactionsDreamcore.concat(data)
-    setAllTransactionsDreamcore(todo);
-    setDondeDreamcore(querySnapshot.docs[querySnapshot.docs.length - 1]);
-  }
-}  
-}
-
-const getPlaylists = async() => {
-    const q = query(collection(db, "people",uid,"playlists"),orderBy('importance', 'desc'),limit(3));
-    const querySnapshot = await getDocs(q);
-    const data = querySnapshot.docs.map(doc => doc.data());
-    setPlaylists3(data);
-}
-
- const getLSongs = async() => {
-    const q = query(collection(db, "people",uid,"playlists","Likes","Likes"),orderBy('popularity', 'desc'),limit(3));
-    const querySnapshot = await getDocs(q);
-    const data = querySnapshot.docs.map(doc => doc.data());
-    setLastS3(data);
-  }
-
-  const getTransactionsArtistas =async () => {
-    const q = query(collection(db, "autores"));
-    const querySnapshot = await getDocs(q);
-    const data = querySnapshot.docs.map(doc => doc.data());
-    const shuffledData = data.sort(() => Math.random() - 0.5);
-
-    setAllTransactionsArtistas(shuffledData.slice(0,shuffledData.length/2-1));
-    setAllTransactionsArtistas2(shuffledData.slice(shuffledData.length/2))
-}
-
-  const updatePla = async(nameA,name) => { 
-    var a = nameA+"_"+name
-    console.log(name,"_",nameA)
+  const updatePla = async(nameA: string, name: string) => { 
+    const a = `${nameA}_${name}`;
     router.push({
       pathname: "/(screens)/Playlist",
       params: {
         qplaylist: a,
         publicaN: name,
-        publica: true
+        publica: 'true'
       }
-    })
+    });
 
-     await delay(1) 
-     const historyARef = doc(db, "playlists", a);
-     await updateDoc(historyARef,{
-      popularity:increment(1)
-     })
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await homeFeed.updatePlaylistPopularity(nameA, name);
   }
 
 
 
-  const change = async (uri, name, autor, img, generos,letra,dominant) => {  
+  const change = async (uri: any, name: string, autor: string, img: string, generos: any, letra: any, dominant: any) => {  
     if(musica[2] !== "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTkM03yBVebiMnBH5Kn2h3XazhS4sAIxn3w6w&s"){
         try {
           // Verificamos si el archivo existe
@@ -430,203 +217,90 @@ const getPlaylists = async() => {
       }
     };
 
-  const renderItemPlaylist = ({ item, i }) => {
-  return(
-  <TouchableOpacity style={{flexDirection:"row",borderRadius:10,backgroundColor:"#252525",width:dimen.width/3.2,height:45,marginLeft:5,alignItems:"center"}} onPress={() => router.push({
-              pathname: "/(screens)/Playlist",
-              params: {
-                qplaylist: item.name,
-              }
-            })}> 
-          <Image
-            source={{ uri: item.uri }} 
-            contentFit='cover'
-            style={{ 
-              width: 40,
-              height: 40,
-              marginLeft:5, 
-            }}></Image>
-            <Text
-            numberOfLines={1}
-              style={{
-                fontSize: 18,
-                color: "white",
-                fontWeight: 'bold',
-                marginLeft:3,
-                maxWidth:"50%"
-              }}
-              >
-              {item.name}
-            </Text>
-      </TouchableOpacity>
-  );
-}
-
-const renderItemLS = ({ item, i }) => { 
-  var color = "white";
-    if(currentTrack?.title === item.name){
-      color = "green"
-    }else{
-      color = "white"
-    }
-  return(
-  <TouchableOpacity style={{flexDirection:"column",borderRadius:10,backgroundColor:"#252525",width:dimen.width/3.2,height:dimen.width/2.7,marginLeft:5,alignItems:"center"}} onPress={() => change(item.uri, item.name, item.autor,item.img,item.generos,item.letra,item.dominantColor)}> 
-          <Image
-            source={{ uri: item.img }} 
-            contentFit='cover'
-            style={{ 
-              width: "100%",
-              height: dimen.width/3.4,
-              borderTopLeftRadius:10,
-              borderTopRightRadius:10,
-              position:"absolute"
-            }}></Image>
-            <Text
-            numberOfLines={1}
-              style={{
-                fontSize: 15,
-                color: color,
-                fontWeight: 'bold',
-                alignSelf:"center",
-                marginTop:"98%"
-              }}
-              >
-              {item.name}
-            </Text>
-      </TouchableOpacity>
-  );
-}
-
-const renderItemPlayO = ({ item, i }) => { 
-  return(
-  <TouchableOpacity style={{flexDirection:"row",borderRadius:10,backgroundColor:"#252525",height:50,marginLeft:5,width:150,marginBottom:5}} onPress={() => updatePla(item.by,item.nameP)}>
-          <Image
-            source={{ uri: "https://images.squarespace-cdn.com/content/v1/587d4a02bebafb893ba07d90/1484886557050-V261JTTHHGX0O3KHW5OX/ui-ux-playlist-gen-icon.png"  }} 
-            contentFit='cover'
-            style={{ 
-              width: 40,
-              height: 40,
-              marginLeft:5, 
-              marginTop:5,
-            }}></Image>
-
-            <View style={{flexDirection:"column",alignSelf:"flex-start",marginRight:10}}>
-              <Text
-              numberOfLines={1}
-                style={{
-                  fontSize: 18,
-                  color: "white",
-                  fontWeight: 'bold',
-                  marginLeft:5,
-                  marginTop:5, 
-                  textAlign:"left"
-                }}
-                >
-                {item.nameP}
-              </Text>
-              <Text
-              numberOfLines={1}
-                style={{
-                  fontSize: 12,
-                  color: "gray",
-                  fontWeight: 'bold',
-                  marginLeft:5,
-                  marginTop:-2, 
-                  textAlign:"left"
-                }}
-                >
-                {item.byN}
-              </Text>
-            </View>
-      </TouchableOpacity>
-  );
-}
-
-const renderItemArtistas = ({ item, i }) => { 
-  return(
-    <TouchableOpacity onPress={() => {
-      router.push({
-        pathname: "/(screens)/Autor",
-        params: {
-          nameA: item.name,
-        }
-      });
-    }} 
-    style={{flexDirection:"row",borderRadius:10,backgroundColor:"#252525",height:50,marginLeft:5,width:150,marginHorizontal:10,alignItems:"center"}}>
-    <Image
-            source={{ uri: item.uri  }} 
-            contentFit='cover'
-            style={{ 
-              width: 40,
-              height: 40,
-              borderRadius:10,
-              justifyContent:"flex-start",
-              margin:5
-            }}></Image>
-              <Text
-              numberOfLines={1}
-                style={{
-                  fontSize: 16,
-                  color: "white",
-                  fontWeight: 'bold',
-                  marginLeft:5,
-                  textAlign:"center",
-                  width:90
-                }}
-                >
-                {item.name}
-              </Text>
-      </TouchableOpacity>
-  );
-}
-
-  const renderItem = ({ item, i }) => {
-    var color = "white";
-    if(currentTrack?.title === item.name){
-      color = "green"
-    }
-
-    
+  
+  /* Memoized item components to reduce re-renders and improve performance */
+  const PlaylistCard = React.memo(({ item }: { item: any }) => {
+    const artwork = item.uri || item.img || 'https://images.squarespace-cdn.com/content/v1/587d4a02bebafb893ba07d90/1484886557050-V261JTTHHGX0O3KHW5OX/ui-ux-playlist-gen-icon.png';
     return (
-      <TouchableOpacity style={{padding:5}} onPress={() => change(item.uri, item.name, item.autor,item.img,item.generos,item.letra,item.dominantColor)}> 
+      <TouchableOpacity style={{flexDirection:"row",borderRadius:10,backgroundColor:"#252525",width:dimen.width/3.2,height:45,marginLeft:5,alignItems:"center"}} onPress={() => router.push({ pathname: "./../(screens)/Playlist", params: { qplaylist: item.name } })}>
+        <Image source={{ uri: artwork }} cachePolicy='memory-disk' contentFit='cover' style={{ width: 40, height: 40, marginLeft:5 }} />
+        <Text numberOfLines={1} style={{ fontSize: 18, color: "white", fontWeight: 'bold', marginLeft:3, maxWidth:"50%" }}>{item.name}</Text>
+      </TouchableOpacity>
+    );
+  });
+
+  const SongCard = React.memo(({ item }: { item: any }) => {
+    const color = currentTrack?.title === item.name ? 'green' : 'white';
+    const artwork = item.img || item.artwork || item.cover || item.uri || 'https://images.squarespace-cdn.com/content/v1/587d4a02bebafb893ba07d90/1484886557050-V261JTTHHGX0O3KHW5OX/ui-ux-playlist-gen-icon.png';
+    return (
+      <TouchableOpacity style={{padding:5}} onPress={() => change(item.uri, item.name, item.autor, item.img, item.generos, item.letra, item.dominantColor)}>
         <View style={styles.box}>
-          <Image
-            source={{ uri: `${item.img}` }}
-            contentFit='cover'
-            style={{
-              width: RFValue(120),
-              height: RFValue(120),
-              borderRadius: 0,
-              marginLeft: 5,
-            }}></Image>
+          <Image source={{ uri: artwork }} cachePolicy='memory-disk' contentFit='cover' style={{ width: RFValue(120), height: RFValue(120), borderRadius: 0, marginLeft: 5 }} />
           <View style={{ marginLeft: 5, width:RFValue(120)}}>
-            <Text
-              style={{
-                fontSize: 15,
-                color: color,
-                fontWeight: 'bold',
-                marginTop: 9,
-              }}
-              adjustsFontSizeToFit={false} numberOfLines={1}>
-              {item.name}
-            </Text>
+            <Text style={{ fontSize: 15, color, fontWeight: 'bold', marginTop: 9 }} adjustsFontSizeToFit={false} numberOfLines={1}>{item.name}</Text>
             <View style={{flexDirection:"column"}}>
-              <Text
-                style={{
-                  fontSize: 13,
-                  color: '#969696',
-                  marginTop: 2,
-                  marginLeft: 2,
-                }}
-                adjustsFontSizeToFit={false} numberOfLines={2}>
-                {item.tipo} · {item.autor}
-              </Text> 
+              <Text style={{ fontSize: 13, color: '#969696', marginTop: 2, marginLeft: 2 }} adjustsFontSizeToFit={false} numberOfLines={2}>{item.tipo} · {item.autor}</Text>
             </View>
           </View>
         </View>
       </TouchableOpacity>
     );
-  };
+  });
+
+  const SongCardMain = React.memo(({ item }: { item: any }) => {
+    const color = currentTrack?.title === item.name ? 'green' : 'white';
+    const artwork = item.img || item.artwork || item.cover || item.uri || 'https://images.squarespace-cdn.com/content/v1/587d4a02bebafb893ba07d90/1484886557050-V261JTTHHGX0O3KHW5OX/ui-ux-playlist-gen-icon.png';
+    return(
+    <TouchableOpacity style={{flexDirection:"column",borderRadius:10,backgroundColor:"#252525",width:dimen.width/3.2,height:dimen.width/2.7,marginLeft:5,alignItems:"center"}} onPress={() => change(item.uri, item.name, item.autor,item.img,item.generos,item.letra,item.dominantColor)}> 
+      <Image source={{ uri: artwork }} cachePolicy='memory-disk' contentFit='cover' style={{ width: "100%",
+        height: dimen.width/3.4,
+        borderTopLeftRadius:10,
+        borderTopRightRadius:10,
+        position:"absolute" }} />
+      <Text
+      numberOfLines={1}
+        style={{
+          fontSize: 15,
+          color: color,
+          fontWeight: 'bold',
+          alignSelf:"center",
+          marginTop:"98%"
+        }}
+        >
+        {item.name}
+      </Text>
+    </TouchableOpacity>
+    );
+  });
+
+
+  const PlaylistOCard = React.memo(({ item }: { item: any }) => {
+    return (
+      <TouchableOpacity style={{flexDirection:"row",borderRadius:10,backgroundColor:"#252525",height:50,marginLeft:5,width:150,marginBottom:5}} onPress={() => updatePla(item.by,item.nameP)}>
+        <Image source={{ uri: "https://images.squarespace-cdn.com/content/v1/587d4a02bebafb893ba07d90/1484886557050-V261JTTHHGX0O3KHW5OX/ui-ux-playlist-gen-icon.png"  }} contentFit='cover' style={{ width: 40, height: 40, marginLeft:5, marginTop:5 }} />
+        <View style={{flexDirection:"column",alignSelf:"flex-start",marginRight:10}}>
+          <Text numberOfLines={1} style={{ fontSize: 18, color: "white", fontWeight: 'bold', marginLeft:5, marginTop:5, textAlign:"left" }}>{item.nameP}</Text>
+          <Text numberOfLines={1} style={{ fontSize: 12, color: "gray", fontWeight: 'bold', marginLeft:5, marginTop:-2, textAlign:"left" }}>{item.byN}</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  });
+
+  const ArtistCard = React.memo(({ item }: { item: any }) => {
+    return (
+      <TouchableOpacity onPress={() => { router.push({ pathname: "/(screens)/Autor", params: { nameA: item.name } }); }} style={{flexDirection:"row",borderRadius:10,backgroundColor:"#252525",height:50,marginLeft:5,width:150,marginHorizontal:10,alignItems:"center"}}>
+        <Image source={{ uri: item.uri }} contentFit='cover' style={{ width: 40, height: 40, borderRadius:10, justifyContent:"flex-start", margin:5 }} />
+        <Text numberOfLines={1} style={{ fontSize: 16, color: "white", fontWeight: 'bold', marginLeft:5, textAlign:"center", width:90 }}>{item.name}</Text>
+      </TouchableOpacity>
+    );
+  });
+
+  // Stable render callbacks
+  const renderItemPlaylist = useCallback(({ item }: { item: any }) => <PlaylistCard item={item} />, [router]);
+  const renderItemLS = useCallback(({ item }: { item: any }) => <SongCardMain item={item} />, [currentTrack]);
+  const renderItemPlayO = useCallback(({ item }: { item: any }) => <PlaylistOCard item={item} />, [updatePla]);
+  const renderItemArtistas = useCallback(({ item }: { item: any }) => <ArtistCard item={item} />, [router]);
+  const renderItem = useCallback(({ item }: { item: any }) => <SongCard item={item} />, [currentTrack]);
 
 
  const Playlist3 = ()=> {
@@ -636,7 +310,7 @@ const renderItemArtistas = ({ item, i }) => {
         style={{ marginTop: 0, marginLeft:3,backgroundColor:"#111111"}}  
         data={playlists3}
         renderItem={renderItemPlaylist}
-        onEndReached={() =>getMoreTransactionsP()}
+        onEndReached={() => fetchMoreTransactionsP(user, allTransactionsP, dondeP)}
         onEndReachedThreshold={0.5}
         showsVerticalScrollIndicator={false}
         scrollsToTop={false}
@@ -683,7 +357,7 @@ const renderItemArtistas = ({ item, i }) => {
           style={{ marginTop: 10}} 
           data={allTransactionsP}
           renderItem={renderItem}
-          onEndReached={() =>getMoreTransactionsP()}
+          onEndReached={() => fetchMoreTransactionsP(user, allTransactionsP, dondeP)}
           onEndReachedThreshold={0.5}
           showsVerticalScrollIndicator={false}
           scrollsToTop={false}
@@ -706,7 +380,7 @@ const renderItemArtistas = ({ item, i }) => {
           style={{ marginTop: 10}} 
           data={allTransactionsN}
           renderItem={renderItem}
-          onEndReached={() =>getMoreTransactionsN()}
+          onEndReached={() => fetchMoreTransactionsN(user, allTransactionsN, dondeN)}
           onEndReachedThreshold={0.5}
           showsVerticalScrollIndicator={false}
           scrollsToTop={false}
@@ -760,7 +434,7 @@ const renderItemArtistas = ({ item, i }) => {
           data={allTransactionsPlaylistsO}
           renderItem={({ item }) => (
           <View style={{ flexDirection: 'column' }}>
-            {item.map((playlist) => renderItemPlayO({item: playlist}))}  
+            {item.map((playlist: any) => renderItemPlayO({item: playlist}))}  
           </View>
         )}
           onEndReachedThreshold={0.5}
@@ -814,7 +488,7 @@ const renderItemArtistas = ({ item, i }) => {
           style={{ marginTop: 10}} 
           data={allTransactionsPop}
           renderItem={renderItem}
-          onEndReached={() =>getMorePop()}
+          onEndReached={() => fetchMoreGenreSection(user, allTransactionsPop, dondePop, 'pop', setAllTransactionsPop, setDondePop)}
           onEndReachedThreshold={0.5}
           showsVerticalScrollIndicator={false}
           scrollsToTop={false}
@@ -837,7 +511,7 @@ const renderItemArtistas = ({ item, i }) => {
           style={{ marginTop: 10}} 
           data={allTransactionsAmbient}
           renderItem={renderItem}
-          onEndReached={() =>getMoreAmbient()}
+          onEndReached={() => fetchMoreGenreSection(user, allTransactionsAmbient, dondeAmbient, 'ambient', setAllTransactionsAmbient, setDondeAmbient)}
           onEndReachedThreshold={0.5}
           showsVerticalScrollIndicator={false}
           scrollsToTop={false}
@@ -860,7 +534,7 @@ const renderItemArtistas = ({ item, i }) => {
           style={{ marginTop: 10}} 
           data={allTransactionsDreamcore}
           renderItem={renderItem}
-          onEndReached={() =>getMoreDreamcore()}
+          onEndReached={() => fetchMoreGenreSection(user, allTransactionsDreamcore, dondeDreamcore, 'dreamcore', setAllTransactionsDreamcore, setDondeDreamcore)}
           onEndReachedThreshold={0.5}
           showsVerticalScrollIndicator={false}
           scrollsToTop={false}

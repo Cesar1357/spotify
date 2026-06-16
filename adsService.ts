@@ -4,7 +4,7 @@ import TrackPlayer from "react-native-track-player";
 import { auth, db } from "./config/firebase";
 
 
-let ads = []; // se rellenará desde Firestore
+let ads: any[] = []; // se rellenará desde Firestore
 let premium = false;
 // 🔄 Cargar anuncios desde Firebase
 export async function loadAds() {
@@ -37,8 +37,8 @@ export async function loadAds() {
 
 
 
-export async function playAdBase({ setMusica, setCurrentTrack, setAdT, user, setIsVideoReady }: { setMusica: Function; setCurrentTrack: Function; setAdT: Function; user: string[]; setIsVideoReady: Function }) {
-  premium = user?.premium || false;
+export async function playAdBase({ setMusica, setCurrentTrack, setAdT, user, setIsVideoReady }: { setMusica: Function; setCurrentTrack: Function; setAdT: Function; user: any; setIsVideoReady: Function }) {
+  premium = Boolean(user?.premium);
 
 
   if (ads.length === 0 || user.premium) {
@@ -54,10 +54,9 @@ export async function playAdBase({ setMusica, setCurrentTrack, setAdT, user, set
   if (ran < 0.5) {
     console.log("Añadiendo anuncio a la cola...");
     const currentTrackId = await TrackPlayer.getActiveTrackIndex();
+    const insertIndex = typeof currentTrackId === 'number' ? currentTrackId + 1 : undefined;
     const randomIndex = Math.floor(Math.random() * ads.length);
-    const selectedAd = ads[randomIndex];
-
-    // Guarda la canción actual
+    const selectedAd: any = ads[randomIndex];
 
     // Inserta el anuncio en el player
     setCurrentTrack({
@@ -85,7 +84,7 @@ export async function playAdBase({ setMusica, setCurrentTrack, setAdT, user, set
       qplaylist: "Anuncios",
       donde: "Anuncios",
       isAd: true,
-    },currentTrackId+1);
+    }, insertIndex);
     await TrackPlayer.skipToNext();
     await TrackPlayer.pause();
     console.log("▶️ Anuncio en reproducción:", selectedAd.title);
@@ -104,9 +103,17 @@ export async function playAd() {
     console.log("update Intentando adsservice");
     console.log("Saltando anuncio");
     const track = await TrackPlayer.getActiveTrack();
+    if (!track) {
+      console.warn('No active track available for adsService update');
+      return;
+    }
 
     try{
-      const uid = auth.currentUser?.uid
+      const uid = auth.currentUser?.uid;
+      if (!uid) {
+        console.warn('No authenticated user for adsService update');
+        return;
+      }
       
       const now = dayjs();
       let seconds = now.second();
@@ -117,13 +124,15 @@ export async function playAd() {
 
       const newSeconds = decenas + unidadesRedondeadas;
 
-      var date = now.set("second", newSeconds).format("ddd MMM DD YYYY HH:mm:ss").concat(track.title);
+      var date = now.set("second", newSeconds).format("ddd MMM DD YYYY HH:mm:ss").concat(String(track.title));
 
       let letra1 = track.letra ?? "";
       let dominant1 = track.dominantColor ?? "";
+      const qplaylist = String(track.qplaylist ?? '');
+      const trackTitle = String(track.title ?? '');
 
-      console.log("actualizando reproducciones en adsService", "qplay:",track.qplaylist)
-      const ref = doc(db, "people", uid,"playlists",track.qplaylist,"Likes",track.title);
+      console.log("actualizando reproducciones en adsService", "qplay:", qplaylist)
+      const ref = doc(db, "people", String(uid),"playlists", qplaylist,"Likes", trackTitle);
         await updateDoc(ref, {
           popularity:increment(1)
         }).then(() => {
@@ -134,7 +143,7 @@ export async function playAd() {
         });
   
   
-        const historyARef = doc(db, "people", uid, "historyA", date);
+        const historyARef = doc(db, "people", String(uid), "historyA", date);
         setDoc(historyARef,{
           dateU:Timestamp.now().toDate(),
           dateS:date,
@@ -166,6 +175,7 @@ export async function playAd() {
     const randomIndex = Math.floor(Math.random() * ads.length);
     const selectedAd = ads[randomIndex];
     // Inserta el anuncio en el player
+    const insertIndex2 = typeof currentTrackId === 'number' ? currentTrackId + 1 : undefined;
     await TrackPlayer.add({
       id: selectedAd.id,
       url: selectedAd.url,
@@ -177,7 +187,7 @@ export async function playAd() {
       qplaylist: "Anuncios",
       donde: "Anuncios",
       isAd: true,
-    },currentTrackId+1);
+    }, insertIndex2);
     await TrackPlayer.skipToNext();
     await TrackPlayer.play();
     

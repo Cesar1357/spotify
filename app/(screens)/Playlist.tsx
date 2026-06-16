@@ -35,23 +35,40 @@ import { useApp } from '../../context/AppContext';
 
 import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, orderBy, query, setDoc, Timestamp, writeBatch } from "firebase/firestore";
 
+type Track = {
+  id?: number | string;
+  url: string;
+  vid?: any;
+  title?: string;
+  artist?: string;
+  artwork?: string;
+  dominantColor?: string;
+  generos?: any;
+  letra?: any;
+  qplaylist?: string;
+  donde?: string;
+  isLocal?: boolean;
+  [key: string]: any;
+};
+
 export default function Search() {
-  const [lists, setLists] = useState([]);
-  const [allSee, setAllSee] = useState([])
+  const [lists, setLists] = useState<any[]>([]);
+  const [allSee, setAllSee] = useState<Track[]>([]);
   const { setQplaylist, icon, setIcon, musica, setMusica, colorA, setColorA, playlistSongs, setPlaylistSongs, estado2, modoReproduccion, setModoReproduccion, currentIndexRef, currentTrack, setCurrentTrack, setCurrentIndex, reproduciendoD, setReproduciendoD } = useApp();
-  const [allTransactionsS,setAllTransactionsS] = useState([])
-  const [allPlaylists, setAllPlaylists] = useState([]);
+  const [allTransactionsS,setAllTransactionsS] = useState<any[]>([])
+  const [allPlaylists, setAllPlaylists] = useState<any[]>([]);
   const pathname = usePathname();
   
   const [iconLC, setIconLC] = useState("white"); 
 
   const { qplaylist, publica, publicaN } = useLocalSearchParams();
+  const qp = Array.isArray(qplaylist) ? qplaylist[0] : (qplaylist ?? 'Likes');
   const [nameAP, setNameAP] = useState("");
   const [uidAP, setUidAP] = useState("");
   const [popularityAP, setPopularityAP] = useState(0);
   const [dateAP, setDateAP] = useState("");
 
-  const [actualS2, setActualS2] = useState({});
+  const [actualS2, setActualS2] = useState<any>({});
 
   const [visibleN, setVisibleN] = useState(false)
   const [visibleP, setVisibleP] = useState(false);
@@ -72,10 +89,11 @@ export default function Search() {
   const [Nnombre, setNnombre] = useState("");
 
   const { uid, loading } = useAuth();
-  const [user, setUser] = useState([]);
+  const [user, setUser] = useState<any>(null);
   var dimen = Dimensions.get("window")
 
   const searchRef = useRef<TextInput>(null);
+  const searchVersionRef = useRef(0);
   const [visibleI, setVisibleI] = useState(false);
   const [visibleA, setVisibleA] = useState(false);
   
@@ -89,21 +107,19 @@ export default function Search() {
   const snapPoints4 = useMemo(() => ['40%', '40%'], []);
 
 
-  const Option = ({ icon, label, onPress }) => (
+  const Option: React.FC<{ icon: string; label: string; onPress: () => void }> = ({ icon, label, onPress }) => (
       <TouchableOpacity style={styles.option} onPress={onPress}>
         <Icon type="ionicon" name={icon} color="gray" size={30} />
         <Text style={styles.optionText}>{label}</Text>
       </TouchableOpacity>
     );
-    
-  const [actualizado, setActualizado] = useState(false);
 
   useEffect(() => {
-  setQplaylist(qplaylist);
+  setQplaylist(qp);
 
   const cargarPlaylist = async () => {
     if (lists) {
-      const qplaylist2 = publica ? "Likes" : qplaylist;
+      const qplaylist2 = publica ? "Likes" : qp;
 
       // 🔄 Revisamos todas las canciones en paralelo
       const playlist = await Promise.all(
@@ -153,25 +169,6 @@ export default function Search() {
 
 
   useEffect(() => {
-    const f = async () => {
-      if(actualizado === false){
-        console.log("Re-rendering Search screen",qplaylist,musica[0]);
-        if(musica[0] && lists.some(song => song.name === musica[0])){
-          setActualizado(true);
-          console.log("Updating musica in Search screen:", musica[0]);
-          setMusica([musica[0],musica[1],musica[2],musica[3],musica[4],musica[5],qplaylist,musica[7]])
-          setReproduciendoD(qplaylist)
-          console.log("Musica updated in Search screen:", musica[0]);
-          await loadPlaylist(playlistSongs, modoReproduccion);
-        }
-      }
-    }
-    f();
-  },[lists, musica, actualizado, qplaylist, playlistSongs, modoReproduccion]);
-
-  
-
-  useEffect(() => {
       const backAction = () => {
         if(visibleP){
           modalRefP.current?.close()
@@ -191,8 +188,8 @@ export default function Search() {
     }, [ visibleP, modalVisible]);
 
   useEffect(() => {
-    let unsubscribe;
-    let unsubscribe2;
+    let unsubscribe: (() => void) | undefined = undefined;
+    let unsubscribe2: (() => void) | undefined = undefined;
 
     const checkInternetConnection = async () => {
       try{
@@ -204,7 +201,7 @@ export default function Search() {
               getUser()
               getPlaylists();
               if(!publica){
-                const q = query(collection(db, 'people',uid,"playlists",qplaylist,"Likes"),orderBy(filtro, 'desc'));
+                const q = query(collection(db, 'people', String(uid),"playlists",String(qp),"Likes"),orderBy(filtro, 'desc'));
                 unsubscribe = onSnapshot(q, (querySnapshot) => {
                   if(querySnapshot.empty){
                     setLists([]);
@@ -217,7 +214,7 @@ export default function Search() {
                 });
               }else{
                 console.log("es una playlist publica")
-                const q = query(collection(db, 'playlists',qplaylist,publicaN),orderBy(filtro, 'desc'));
+                const q = query(collection(db, 'playlists', String(qp), String(publicaN)),orderBy(filtro, 'desc'));
                 unsubscribe = onSnapshot(q, (querySnapshot) => {
                   if(querySnapshot.empty){
                     setLists([]);
@@ -248,8 +245,8 @@ export default function Search() {
       if(unsubscribe){
         unsubscribe(); // Limpia el primer escucha
       }
-      if(unsubscribe2){
-        unsubscribe2();
+      if (unsubscribe2) {
+        (unsubscribe2 as any)();
       }
     };
 
@@ -258,18 +255,18 @@ export default function Search() {
   useEffect(() => {
     const f = async() => {
       if(publica){
-        const docRef = doc(db, "playlists", qplaylist);
+        const docRef = doc(db, "playlists", String(qp));
         const docSnap = await getDoc(docRef);
         const info = docSnap.data();
-        setNameAP(info.byN);
-        setPopularityAP(info.popularity);
-        setUidAP(info.by);
-        const date = info.dateU.toDate()
-        .toString()
-        .split(' ')
-        .splice(0, 5)
-        .join(' ');
-        setDateAP(date);
+        if(info){
+          setNameAP(info.byN ?? '');
+          setPopularityAP(info.popularity ?? 0);
+          setUidAP(info.by ?? '');
+          const date = info.dateU?.toDate?.()
+          ? info.dateU.toDate().toString().split(' ').splice(0,5).join(' ')
+          : '';
+          setDateAP(date);
+        }
       }
     }
     f();
@@ -284,13 +281,13 @@ export default function Search() {
   },[musica[0]]); 
   
   const getUser =async () => {
-    const docRef = doc(db, "people", uid);
+    const docRef = doc(db, "people", String(uid));
     const docSnap = await getDoc(docRef);
     const info = docSnap.data()
     setUser(info)
   }
 
-  const obtener = async (si) => {
+  const obtener = async (si: boolean = false) => {
     console.log("obteniendo")
   try {
     // Cargar la colección desde AsyncStorage
@@ -303,9 +300,9 @@ export default function Search() {
       
       var coleccionOrdenada;
       if(filtro === "dateU"){
-        coleccionOrdenada = coleccionParseada.sort((a, b) => b.dateU - a.dateU);
+        coleccionOrdenada = coleccionParseada.sort((a: any, b: any) => b.dateU - a.dateU);
       }else if(filtro === "popularity"){
-        coleccionOrdenada = coleccionParseada.sort((a, b) => b.popularity - a.popularity);
+        coleccionOrdenada = coleccionParseada.sort((a: any, b: any) => b.popularity - a.popularity);
       }
       // Actualizar el estado local con la colección ordenada
       setAllTransactionsS(coleccionOrdenada);
@@ -323,17 +320,18 @@ export default function Search() {
 };
 
   const getPlaylists = () => {
-    const q = query(collection(db, 'people',uid,"playlists"),orderBy('importance', 'desc'));
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+    const q = query(collection(db, 'people', String(uid),"playlists"),orderBy('importance', 'desc'));
+    const unsubscribeLocal = onSnapshot(q, (querySnapshot) => {
       const docs = querySnapshot.docs
-      .map((doc) => doc.data())
-      .filter((playlist) => playlist.name !== qplaylist);
+      .map((doc) => doc.data() ?? {})
+      .filter((playlist: any) => playlist.name !== qp);
       setAllPlaylists(docs)
     });
+    return unsubscribeLocal;
   }
 
 
-  const change = async (uri, name, autor, img, generos,letra,dominant,index) => {  
+  const change = async (uri: any, name: string, autor: string, img: string, generos: any, letra: any, dominant: any, index: number) => {  
     console.log("indice Change",index,"||",currentIndexRef.current)
       if(musica[2] !== "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTkM03yBVebiMnBH5Kn2h3XazhS4sAIxn3w6w&s"){
           try {
@@ -393,23 +391,85 @@ export default function Search() {
         }
       };
 
-  const loadPlaylist = async (playlist, shuffle = 0) => {
-    await TrackPlayer.removeUpcomingTracks();
+  const shufflePlaylist = (playlist: Track[]) : Track[] => {
+    const copy = [...playlist];
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+  };
 
-    const finalPlaylist = shuffle === 2
-      ? [...playlist].sort(() => Math.random() - 0.5)
-      : playlist;
-    console.log("cargadas")
-    await TrackPlayer.add(finalPlaylist);
-    setActualizado(true);
+  const buildPlaylistQueue = (playlist: Track[], mode: number, currentTrackObject?: Track | null): Track[] => {
+    if (!Array.isArray(playlist) || playlist.length === 0) {
+      return [];
+    }
+
+    const activeIndex = currentTrackObject
+      ? playlist.findIndex(
+          (item) => item.id === currentTrackObject.id || item.title === currentTrackObject.title
+        )
+      : -1;
+
+    if (mode === 3) {
+      return currentTrackObject ? [] : [playlist[0]];
+    }
+
+    if (mode === 2) {
+      const remaining = playlist.filter((item, index) => index !== activeIndex);
+      return shufflePlaylist(remaining);
+    }
+
+    if (mode === 0) {
+      return currentTrackObject ? [] : [playlist[0]];
+    }
+
+    // mode === 1 or fallback order mode
+    return activeIndex >= 0 ? playlist.slice(activeIndex + 1) : playlist;
+  };
+
+  const loadPlaylist = async (playlist: Track[] | any, mode = 0, preserveCurrent = false): Promise<void> => {
+    if (!Array.isArray(playlist) || playlist.length === 0) {
+      return;
+    }
+
+    const currentTrackId = await TrackPlayer.getCurrentTrack();
+    const isPlayingTrackLoaded = currentTrackId !== null;
+    const queue = buildPlaylistQueue(playlist, mode, isPlayingTrackLoaded ? currentTrack : null);
+
+    const normalizeTrack = (item: any) => {
+      const url = item.url ?? (Array.isArray(item.uri) ? item.uri[0] : item.uri) ?? item.audio ?? item.src ?? null;
+      return {
+        ...(item.id !== undefined ? { id: item.id } : {}),
+        url,
+        title: item.title ?? item.name ?? '',
+        artist: item.artist ?? item.autor ?? '',
+        artwork: item.artwork ?? item.img ?? undefined,
+        ...item,
+      };
+    };
+
+    if (isPlayingTrackLoaded && preserveCurrent) {
+      await TrackPlayer.removeUpcomingTracks();
+      if (queue.length > 0) {
+        await TrackPlayer.add(queue.map(normalizeTrack) as any);
+      }
+    } else {
+      await TrackPlayer.reset();
+      if (queue.length > 0) {
+        await TrackPlayer.add(queue.map(normalizeTrack) as any);
+      }
+      if (queue.length > 0) {
+        currentIndexRef.current = 0;
+      }
+    }
   };
 
 
-const _playAndPause =async () => {
+const _playAndPause = async () => {
   try {
-    var track = await TrackPlayer.getCurrentTrack()
-    if(track !== null){
-      console.log("pl1");
+    const currentTrackId = await TrackPlayer.getCurrentTrack();
+    if (currentTrackId !== null) {
       if (estado2 === State.Playing) {
         setIcon('play');
         await TrackPlayer.pause();
@@ -417,23 +477,61 @@ const _playAndPause =async () => {
         setIcon('pause');
         await TrackPlayer.play();
       }
-    }else{
-      console.log("pl2");
-      setModoReproduccion(2);
-      await loadPlaylist(playlistSongs, 2);
-      TrackPlayer.play();
+      return;
+    }
+
+    if (!playlistSongs || playlistSongs.length === 0) {
       ToastAndroid.showWithGravity(
-      "Reproducción automática aleatoria activada",
+        'No hay canciones disponibles para reproducir',
+        ToastAndroid.SHORT,
+        ToastAndroid.BOTTOM
+      );
+      return;
+    }
+
+    await loadPlaylist(playlistSongs, 2, false);
+    setIcon('pause');
+    await TrackPlayer.play();
+
+    setModoReproduccion(2);
+    let message = 'Reproducción automática aleatoria activada';
+    ToastAndroid.showWithGravity(
+      message,
       ToastAndroid.SHORT,
-      ToastAndroid.BOTTOM // Cambiado a la parte inferior de la pantalla
+      ToastAndroid.BOTTOM
+    );
+
+    if (modoReproduccion === 0) {
+      ToastAndroid.showWithGravity(
+        'Reproducción iniciada',
+        ToastAndroid.SHORT,
+        ToastAndroid.BOTTOM
+      );
+    } else if (modoReproduccion === 1) {
+      ToastAndroid.showWithGravity(
+        'Reproducción automática activada',
+        ToastAndroid.SHORT,
+        ToastAndroid.BOTTOM
+      );
+    } else if (modoReproduccion === 2) {
+      ToastAndroid.showWithGravity(
+        'Reproducción automática aleatoria activada',
+        ToastAndroid.SHORT,
+        ToastAndroid.BOTTOM
+      );
+    } else if (modoReproduccion === 3) {
+      ToastAndroid.showWithGravity(
+        'Reproducción en bucle activada',
+        ToastAndroid.SHORT,
+        ToastAndroid.BOTTOM
       );
     }
   } catch (error) {
     console.error('Error al reproducir o pausar la canción:', error);
     ToastAndroid.showWithGravity(
-      "Error al reproducir o pausar la canción",
+      'Error al reproducir o pausar la canción',
       ToastAndroid.SHORT,
-      ToastAndroid.BOTTOM // Cambiado a la parte inferior de la pantalla
+      ToastAndroid.BOTTOM
     );
   }
 };
@@ -515,7 +613,7 @@ async function descargarYGuardarCanciones() {
       // Actualiza el estado
       obtener();
     } catch (error) {
-      Alert.alert("Error",'Error al agregar las canciones a la lista', error);
+      Alert.alert("Error", `Error al agregar las canciones a la lista: ${String(error)}`);
     } finally {
       setDescargando(false);
       setVisibleN(false);
@@ -559,7 +657,7 @@ async function eliminarCanciones() {
       // Actualiza el estado
       obtener();
     } catch (error) {
-      Alert.alert("Error",'Error al eliminar las canciones a la lista', error);
+      Alert.alert("Error", `Error al eliminar las canciones a la lista: ${String(error)}`);
     } finally {
       setDescargando(false);
       setVisibleN(false);
@@ -650,7 +748,7 @@ async function descargarYGuardarArchivoLocalmente() {
 }
 
   const deleteCFP = async() => {
-    const ref = doc(db, "people", uid,"playlists",qplaylist,"Likes",actualS2.name);
+    const ref = doc(db, "people", String(uid),"playlists", String(qp),"Likes", String(actualS2.name));
     await deleteDoc(ref).then((e)=>{
       ToastAndroid.showWithGravity(
         "Canción eliminada de esta playlist correctamente",
@@ -672,7 +770,7 @@ async function descargarYGuardarArchivoLocalmente() {
     
   };
 
-  const modalT = (uri, name, autor, tipo, img, generos, letra, dominantColor) => {
+  const modalT = (uri: any, name: string, autor: string, tipo: any, img: string, generos: any, letra: any, dominantColor: any) => {
     if(modalVisible === true){
       setModalVisible(false)
       modalRef.current?.close()
@@ -696,8 +794,8 @@ async function descargarYGuardarArchivoLocalmente() {
     };
 
 
-const renderItem = ({ item, index }) => {
-  const isActive = currentTrack.title === item.title;
+const renderItem = ({ item, index }: { item: any; index: number }) => {
+  const isActive = currentTrack?.title === item.title;
 
   const color = isActive ? 'green' : 'white';
 
@@ -752,10 +850,10 @@ const renderItem = ({ item, index }) => {
 };
 
 
-  const renderItem2 = ({ item, i, index }) => {
+  const renderItem2 = ({ item, index }: { item: any; index: number }) => {
     var color = "white";
     console.log("current",currentTrack)
-    if(currentTrack.title === item.name){
+    if(currentTrack?.title === item.name){
       color = "green"
     }
     
@@ -825,7 +923,7 @@ const renderItem = ({ item, index }) => {
   
 
   const renderPlaylist = useCallback(
-    ({ item }) => (
+    ({ item }: { item: any }) => (
   <TouchableOpacity style={{padding:8,flexDirection:"row"}} onPress={() => getLikesPlaylist(item.name)}>
         <View style={{flexDirection:"row"}}>
           <Image
@@ -855,7 +953,7 @@ const renderItem = ({ item, index }) => {
     []
   );
 
-const getLikesPlaylist =async (playlist) => {
+const getLikesPlaylist = async (playlist: string) => {
   const q = query(collection(db, "people",uid,"playlists",playlist,"Likes"), orderBy('popularity', 'desc'));
   const docs = await getDocs(q)
   const a = docs.docs.map(doc => doc.data());
@@ -970,41 +1068,30 @@ const getLikesPlaylist =async (playlist) => {
   };
 
 
-const activateA = () => {
-  if(modoReproduccion === 0){
-    setModoReproduccion(1);
-    loadPlaylist(playlistSongs, 1);
-    ToastAndroid.showWithGravity(
-    "Reproducción automática activada",
-    ToastAndroid.SHORT,
-    ToastAndroid.BOTTOM // Cambiado a la parte inferior de la pantalla
-    );
-  }else if(modoReproduccion === 1){
-    setModoReproduccion(2);
-    loadPlaylist(playlistSongs, 2);
-    ToastAndroid.showWithGravity(
-    "Reproducción automática aleatoria activada",
-    ToastAndroid.SHORT,
-    ToastAndroid.BOTTOM // Cambiado a la parte inferior de la pantalla
-    );
-  }else if(modoReproduccion === 2){
-    setModoReproduccion(3);
-    loadPlaylist(playlistSongs, 3);
-    ToastAndroid.showWithGravity(
-    "Reproducción en bucle activada",
-    ToastAndroid.SHORT,
-    ToastAndroid.BOTTOM // Cambiado a la parte inferior de la pantalla
-    );
-  }else if(modoReproduccion + 1 === 4){
-    setModoReproduccion(0);
-    loadPlaylist(playlistSongs, 0);
-    ToastAndroid.showWithGravity(
-    "Desactivado",
-    ToastAndroid.SHORT,
-    ToastAndroid.BOTTOM // Cambiado a la parte inferior de la pantalla
-    );
+const activateA = async () => {
+  const nextMode = (modoReproduccion + 1) % 4;
+  setModoReproduccion(nextMode);
+
+  let message = 'Desactivado';
+  if (nextMode === 1) {
+    message = 'Reproducción automática activada';
+  } else if (nextMode === 2) {
+    message = 'Reproducción automática aleatoria activada';
+  } else if (nextMode === 3) {
+    message = 'Reproducción en bucle activada';
   }
-}
+
+  ToastAndroid.showWithGravity(
+    message,
+    ToastAndroid.SHORT,
+    ToastAndroid.BOTTOM
+  );
+
+  const currentTrackId = await TrackPlayer.getCurrentTrack();
+  if (currentTrackId !== null) {
+    await loadPlaylist(playlistSongs, nextMode, true);
+  }
+};
 
 
   const cambiarF = () => {
@@ -1064,27 +1151,30 @@ const activateA = () => {
     }
   }
 
-  const getSongs = async (text) => {
+  const getSongs = async (text: string) => {
   console.log(text);
   setTextB(text);
+  const searchId = ++searchVersionRef.current;
   let a = text;
 
   if (a === "") {
     setAllSee(playlistSongs);
     setBusquedaA(false);
-  } else {
-    console.log("2b");
-    const findtext = a.toLowerCase();
+    return;
+  }
 
-    const searchData = lists.filter((song) =>
-      song.name.toLowerCase().includes(findtext)
-    );
+  console.log("2b");
+  const findtext = a.toLowerCase();
 
-    setBusquedaA(true);
+  const searchData = lists.filter((song) =>
+    String(song.name).toLowerCase().includes(findtext)
+  );
 
-    // 👇 AQUI el await
-    const playlistF = await Promise.all(
-      searchData.map(async (item, index) => {
+  setBusquedaA(true);
+
+  // 👇 AQUI el await
+  const playlistF = await Promise.all(
+    searchData.map(async (item, index) => {
         const nombreArchivo = `${item.name}.mp3`;
         const rutaLocal = `${FileSystem.documentDirectory}${nombreArchivo}`;
         let urlFinal = Array.isArray(item.uri) ? item.uri[0] : item.uri;
@@ -1110,23 +1200,24 @@ const activateA = () => {
           dominantColor: item.dominantColor,
           generos: item.generos,
           letra: item.letra,
-          qplaylist: qplaylist,
-          donde: qplaylist,
+          qplaylist: String(qp),
+          donde: String(qp),
           isLocal: isLocal,
         };
       })
     );
 
     // 👇 y ahora sí, ya está listo el arreglo
-    setAllSee(playlistF);
+    if (searchId === searchVersionRef.current) {
+      setAllSee(playlistF);
+    }
   }
-};
   
   const AddPlaylist = async() => {
 
-    var nombres = []
-    allPlaylists.map((a)=>{
-      nombres.push(a.name.toLowerCase())
+    var nombres: string[] = [];
+    allPlaylists.map((a: any) => {
+      nombres.push(String(a.name).toLowerCase())
     })
     if(!nombres.includes(Nnombre.toLowerCase())){
     
@@ -1231,7 +1322,7 @@ const activateA = () => {
         style={{ marginTop: 10 }}
         data={allSee}
         renderItem={renderItem}
-        keyExtractor={(item, index) => index.toString()}
+        keyExtractor={(item, index) => String(item.id ?? item.title ?? index)}
         showsVerticalScrollIndicator={true}
         indicatorStyle="white"
         persistentScrollbar={true}
@@ -1280,7 +1371,7 @@ const activateA = () => {
         scrollsToTop={false}
         indicatorStyle={'white'}
         persistentScrollbar={true}
-        keyExtractor={(item, index) => index.toString()}
+        keyExtractor={(item, index) => String(item.id ?? item.name ?? index)}
         keyboardShouldPersistTaps={'always'}
         ListEmptyComponent={
             <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
@@ -1370,7 +1461,7 @@ const activateA = () => {
         backdropComponent={BottomSheetBackdrop}
         backgroundStyle={{ backgroundColor: '#111' }}
         handleIndicatorStyle={{ backgroundColor: 'gray' }}
-        onDismiss={()=>modalT()}
+        onDismiss={()=>modalT(undefined as any, '', '', undefined as any, '', undefined as any, undefined as any, undefined as any)}
         stackBehavior='push'
       >
         <View style={{ paddingHorizontal: 16, flexDirection:"column" }}>

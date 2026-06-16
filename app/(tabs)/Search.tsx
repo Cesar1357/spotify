@@ -15,6 +15,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   ToastAndroid,
   TouchableOpacity,
   View
@@ -30,52 +31,59 @@ import TrackPlayer, { Event, Track } from 'react-native-track-player';
 import { db } from '../../config/firebase';
 import { useApp } from '../../context/AppContext';
 
-function delay(n){
+function delay(n: number){
     return new Promise(function(resolve){
         setTimeout(resolve,n*1000);
     });
 }
 export default function Search() {
-  const [allTransactions, setAllTransactions] = useState([]);
-  const [allTransactionsS,setAllTransactionsS] = useState([])
+  const [allTransactions, setAllTransactions] = useState<any[]>([]);
+  const [allTransactionsS, setAllTransactionsS] = useState<any[]>([]);
   const { icon, setIcon, musica, setMusica, colorA, setColorA } = useApp();
 
-  const [songs, setSongs] = useState([]);
-  const [autors, setAutors] = useState([]);
+  const [songs, setSongs] = useState<any[]>([]);
+  const [autors, setAutors] = useState<any[]>([]);
 
-  const [actualS2, setActualS2] = useState({});
+  const [actualS2, setActualS2] = useState<any>({});
 
   const modalRef = useRef<BottomSheetModal>(null);
   const modalRefL = useRef<BottomSheetModal>(null);
   const modalRefP = useRef<BottomSheetModal>(null);
+  const modalRefSuggest = useRef<BottomSheetModal>(null);
 
   const snapPoints = useMemo(() => ['45%', '45%'], []);
   const snapPoints2 = useMemo(() => ['100%', '100%'], []);
   const snapPoints3 = useMemo(() => ['30%', '40%'], []);
 
-  const Option = ({ icon, label, onPress }) => (
+  const Option = ({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) => (
     <TouchableOpacity style={styles.option} onPress={onPress}>
       <Icon type="ionicon" name={icon} color="gray" size={30} />
       <Text style={styles.optionText}>{label}</Text>
     </TouchableOpacity>
   );
 
-  const [likes, setLikes] = useState([])
+  const [likes, setLikes] = useState<any[]>([]);
 
   const [visibleP, setVisibleP] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
-  const [allPlaylists, setAllPlaylists] = useState([]);
-  const [actualPlaylistLikes, setActualPlaylistLikes] = useState([]);
-  const [index, setIndex] = useState();
-  const [playlistsO, setPlaylistsO] = useState([]);
+  const [suggestVisible, setSuggestVisible] = useState(false);
+  const [suggestName, setSuggestName] = useState("");
+  const [suggestAuthor, setSuggestAuthor] = useState("");
+  const [allPlaylists, setAllPlaylists] = useState<any[]>([]);
+  const [actualPlaylistLikes, setActualPlaylistLikes] = useState<any[]>([]);
+  const [index, setIndex] = useState<number | null>(null);
+  const [playlistsO, setPlaylistsO] = useState<any[]>([]);
 
   const appState = useRef(AppState.currentState);
   const [appStateVisible, setAppStateVisible] = useState(appState.current);
   const [text,setText] = useState("")
   var dimen = Dimensions.get("window")
 
-  const [user, setUser] = useState([]);
+  const [user, setUser] = useState<any>(null);
   const [actualizado, setActualizado] = useState(false);
+  const [progress, setProgress] = useState<number>(0);
+  const [playingStatus, setPlayingStatus] = useState<string>('');
+  const [iconLC, setIconLC] = useState<string>('white');
   const { uid, loading } = useAuth();
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [isReady, setIsReady] = useState(false);
@@ -84,10 +92,12 @@ export default function Search() {
       const fetchCurrentTrack = async () => {
         try {
           const trackId = await TrackPlayer.getCurrentTrack();
-          if (trackId !== null) {
+          if (trackId != null) {
             const track = await TrackPlayer.getTrack(trackId);
-            setCurrentTrack(track);
-            console.log('Track actual:', track);
+            if (track) {
+              setCurrentTrack(track);
+              console.log('Track actual:', track);
+            }
           }
         } catch (error) {
           console.error('Error al obtener la pista actual:', error);
@@ -100,8 +110,10 @@ export default function Search() {
       const listener = TrackPlayer.addEventListener(Event.PlaybackTrackChanged, async (e) => {
         if (e.nextTrack != null) {
           const track = await TrackPlayer.getTrack(e.nextTrack);
-          setCurrentTrack(track);
-          console.log('Track cambiado:', track);
+          if (track) {
+            setCurrentTrack(track);
+            console.log('Track cambiado:', track);
+          }
         }
       });
   
@@ -111,21 +123,29 @@ export default function Search() {
     }, []);
 
   useEffect(() => {
-    if(!loading && uid !== null){
-      try{
-        obtener()
+    let unsubscribeLikes: (() => void) | undefined;
+    let unsubscribePlaylists: (() => void) | undefined;
+
+    if (!loading && uid) {
+      try {
+        obtener();
         getHistorial();
-        getTransactions2();
+        unsubscribeLikes = getTransactions2();
         getSongs1();
         getAutors();
-        getPlaylists();
+        unsubscribePlaylists = getPlaylists();
         getPlaylistsOthers();
-        getUser()
-      }catch(err){
-        console.log(err)
+        getUser();
+      } catch (err) {
+        console.log(err);
       }
     }
-  }, [loading,uid]);
+
+    return () => {
+      unsubscribeLikes?.();
+      unsubscribePlaylists?.();
+    };
+  }, [loading, uid]);
   
   useEffect(() => {
       if(actualizado === false){
@@ -153,14 +173,16 @@ const obtener = async() => {
   }
 
 const getTransactions2 = () => {
-  try{
-  const q = query(collection(db, "people", uid,"playlists","Likes","Likes"));
-  const unsub = onSnapshot(q, (snapshot) => {
-    const likesData = snapshot.docs.map(doc => doc.data());
-    setLikes(likesData)
-  });
-  }catch(err){
-    console.log(err)
+  if (!uid) return undefined;
+  try {
+    const q = query(collection(db, "people", uid, "playlists", "Likes", "Likes"));
+    return onSnapshot(q, (snapshot) => {
+      const likesData = snapshot.docs.map(doc => doc.data());
+      setLikes(likesData);
+    });
+  } catch (err) {
+    console.log(err);
+    return undefined;
   }
 }
 
@@ -172,10 +194,11 @@ const getUser =async () => {
   }
 
   const getPlaylists = () => {
-    const q = query(collection(db, 'people',uid,"playlists"),orderBy('importance', 'desc'));
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+    if (!uid) return undefined;
+    const q = query(collection(db, 'people', uid, "playlists"), orderBy('importance', 'desc'));
+    return onSnapshot(q, (querySnapshot) => {
       const docs = querySnapshot.docs.map((doc) => doc.data());
-      setAllPlaylists(docs)
+      setAllPlaylists(docs);
     });
 }
 
@@ -291,7 +314,7 @@ async function descargarYGuardarArchivoLocalmente() {
 }
 
  
-  const updateNumber2 = async(name) => {
+  const updateNumber2 = async (name: string) => {
     const ref = doc(db, "musica", name);
     await updateDoc(ref, {
       popularity:increment(1)
@@ -303,7 +326,7 @@ async function descargarYGuardarArchivoLocalmente() {
     });
   };
 
-  const updateH = (name,autor,uri,image,generos,letra,dominant) => { 
+  const updateH = (name: string, autor: string, uri: any, image: string, generos: any, letra: string, dominant: string) => { 
     var letra1 = ""
     letra1 = letra;
     if(letra1 === undefined){
@@ -352,7 +375,7 @@ async function descargarYGuardarArchivoLocalmente() {
 
   }
 
-  const updateH2 = (name,uri) => {
+  const updateH2 = (name: string, uri: any) => {
     router.push({
       pathname: "/(screens)/Autor",
       params: {
@@ -369,14 +392,14 @@ async function descargarYGuardarArchivoLocalmente() {
     })
   }
 
-  const updatePla = async(uid,name,nameA) => { 
+  const updatePla = async (uid: string, name: string, nameA: string) => { 
     var a = uid+"_"+name
     router.push({
       pathname: "/(screens)/Playlist",
       params: {
         qplaylist: a,
         publicaN: name,
-        publica: true
+        publica: 'true'
       }
     });
      const ref = doc(db, "playlists", a);
@@ -401,7 +424,7 @@ async function descargarYGuardarArchivoLocalmente() {
 
   }
 
-  const errase = async(name) => {
+  const errase = async (name: string) => {
     const ref = doc(db, "people", uid,"history",name);
     await deleteDoc(ref).then((e)=>{
       getHistorial();
@@ -422,7 +445,7 @@ async function descargarYGuardarArchivoLocalmente() {
     }
   },[uid])
 
-  const getSongs = (text) => {
+  const getSongs = (text: string) => {
     setText(text)
     if(text === ""){
       getHistorial()
@@ -456,18 +479,18 @@ async function descargarYGuardarArchivoLocalmente() {
 
 
   const toggleOverlayP = () => {
-    if(visibleP === false){
+    if (visibleP === false) {
       setVisibleP(true);
-      modalT()
-    }else{
-      setActualS2({}) 
+      modalRefP.current?.present();
+    } else {
+      setActualS2({});
       setVisibleP(false);
+      modalRefP.current?.close();
     }
-    
   };
 
 
-  const modalT = (uri, name, autor, tipo, img, generos, letra, dominant) => {
+  const modalT = (uri?: any, name?: string, autor?: string, tipo?: string, img?: string, generos?: any, letra?: string, dominant?: string) => {
     if(modalVisible === true){
       setModalVisible(false)
       modalRef.current?.close()
@@ -478,7 +501,7 @@ async function descargarYGuardarArchivoLocalmente() {
     }
   }
 
-  const change = async (uri, name, autor, img, generos,letra,dominant) => {  
+  const change = async (uri: any, name: string, autor: string, img: any, generos: any, letra: string, dominant: string) => {  
       if(musica[2] !== "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTkM03yBVebiMnBH5Kn2h3XazhS4sAIxn3w6w&s"){
           try {
             // Verificamos si el archivo existe
@@ -489,6 +512,7 @@ async function descargarYGuardarArchivoLocalmente() {
               console.log("ex")
               setMusica([name,autor,img,uri,generos,letra,"Search",dominant])
               await TrackPlayer.load({
+                  id: 1,
                   url: rutaLocal, // Load media from the network
                   title: name,
                   artist: autor,
@@ -506,6 +530,7 @@ async function descargarYGuardarArchivoLocalmente() {
               console.log("noex")
                 setMusica([name,autor,img,uri,generos,letra,"Search",dominant])
                 await TrackPlayer.load({
+                  id: 1,
                   url: Array.isArray(uri)?uri[0]:uri, // Load media from the network
                   vid: Array.isArray(uri)?uri[1]:null,
                   title: name,
@@ -534,7 +559,7 @@ async function descargarYGuardarArchivoLocalmente() {
         }
       };
 
-  const openLink = (nameA,autor) => {
+  const openLink = (nameA: string, autor: string) => {
       const url = `https://www.google.com/search?q=${nameA+" "+autor}`;
       Linking.openURL(url).catch((err) => {
         console.error('Error al abrir el enlace:', err);
@@ -565,7 +590,7 @@ async function descargarYGuardarArchivoLocalmente() {
     };
   }, []);
 
-  const _onPlaybackStatusUpdate = playbackStatus => { 
+  const _onPlaybackStatusUpdate = (playbackStatus: any) => { 
     console.log("xd")
     if (!playbackStatus.isLoaded) {
       // Update your UI for the unloaded state
@@ -606,12 +631,8 @@ async function descargarYGuardarArchivoLocalmente() {
     }
   };
 
-  const renderItem = ({ item, i, index }) => {
-    var color = "white";
-    if(musica[0] === item.name){
-      color = "green"
-      setIndex(index)
-    }
+  const renderItem = ({ item, index }: { item: any; index: number }) => {
+    const color = musica[0] === item.name ? "green" : "white";
      
 
     if(item.tipo === "Canción"){
@@ -912,9 +933,10 @@ async function descargarYGuardarArchivoLocalmente() {
       </TouchableOpacity>
     );
     }
+    return null;
   };
 
-  const renderPlaylist = ({ item, i }) => {
+  const renderPlaylist = ({ item }: { item: any }) => {
   return(
   <TouchableOpacity style={{padding:8,flexDirection:"row"}} onPress={() => getLikesPlaylist(item.name)}>
         <View style={{flexDirection:"row"}}>
@@ -943,7 +965,7 @@ async function descargarYGuardarArchivoLocalmente() {
       </TouchableOpacity>
   );
 }
-const getLikesPlaylist =async (playlist) => {
+const getLikesPlaylist = async (playlist: string) => {
   try{
   const q = query(collection(db, "people",uid,"playlists",playlist,"Likes"), orderBy('popularity', 'desc'));
   const docs = await getDocs(q)
@@ -1059,13 +1081,8 @@ const getLikesPlaylist =async (playlist) => {
   }
   };
 
-  const handleOverlayPress = (e) => {
-    const { locationX, locationY } = e.nativeEvent;
-    const isInsideModal = locationX > 0 && locationY > 0 && locationX < modalRef.current.width && locationY < modalRef.current.height;
-
-    if (!isInsideModal) {
-      modalT();
-    }
+  const handleOverlayPress = () => {
+    modalT();
   };
 
   return (
@@ -1111,7 +1128,7 @@ const getLikesPlaylist =async (playlist) => {
         }
         ListEmptyComponent={
           text !== ""?
-          <TouchableOpacity style={{marginBottom:1,alignSelf:"center",backgroundColor:"#111111",marginTop:"50%"}}> 
+          <TouchableOpacity style={{marginBottom:1,alignSelf:"center",backgroundColor:"#111111",marginTop:"50%"}} onPress={() => { setSuggestVisible(true); modalRefSuggest.current?.present(); }}>
             <Text style={{fontSize:25,color:"white",fontWeight:"bold",textAlign:"center",borderColor:"gray",borderTopWidth:2}}>No la encontramos</Text>
             <Text style={{fontSize:25,color:"white",fontWeight:"bold",textAlign:"center",borderColor:"gray",borderBottomWidth:2}}>¡Agrégala!</Text>
           </TouchableOpacity>
@@ -1164,6 +1181,63 @@ const getLikesPlaylist =async (playlist) => {
       />
     </View>
   </BottomSheetModal> 
+
+    <BottomSheetModal
+      ref={modalRefSuggest}
+      index={1}
+      snapPoints={['40%','40%']}
+      enableDynamicSizing={false}
+      detached={true}
+      containerStyle={{width:"100%"}}
+      backdropComponent={BottomSheetBackdrop}
+      backgroundStyle={{ backgroundColor: '#111' }}
+      handleIndicatorStyle={{ backgroundColor: 'gray' }}
+      stackBehavior='switch'
+    >
+      <View style={styles.modalContent}>
+        <Text style={{fontSize:16,color:'white',fontWeight:'bold',textAlign:'center',marginBottom:10}}>Sugerir una canción</Text>
+        <TextInput
+          placeholder='Nombre de la canción'
+          placeholderTextColor='#888'
+          value={suggestName}
+          onChangeText={setSuggestName}
+          style={{backgroundColor:'#222',color:'white',padding:10,borderRadius:8,marginBottom:10}}
+        />
+        <TextInput
+          placeholder='Artista (opcional)'
+          placeholderTextColor='#888'
+          value={suggestAuthor}
+          onChangeText={setSuggestAuthor}
+          style={{backgroundColor:'#222',color:'white',padding:10,borderRadius:8,marginBottom:10}}
+        />
+        <TouchableOpacity style={styles.button} onPress={async () => {
+          if(!suggestName || suggestName.trim() === ""){
+            ToastAndroid.showWithGravity('Escribe el nombre de la canción', ToastAndroid.SHORT, ToastAndroid.BOTTOM);
+            return;
+          }
+          try{
+            await setDoc(doc(collection(db, 'musicaSugerencias'), suggestName), {
+              name: suggestName.trim(),
+              autor: suggestAuthor?.trim() || '',
+              uid: uid || null,
+              dateU: Timestamp.now().toDate()
+            });
+            ToastAndroid.showWithGravity('Gracias por la sugerencia', ToastAndroid.SHORT, ToastAndroid.BOTTOM);
+            setSuggestName(''); setSuggestAuthor(''); setSuggestVisible(false);
+            modalRefSuggest.current?.close();
+          }catch(err){
+            console.log(err);
+            ToastAndroid.showWithGravity('Error al enviar la sugerencia', ToastAndroid.SHORT, ToastAndroid.BOTTOM);
+          }
+        }}>
+          <Icon type='ionicon' name='checkmark-circle' color='green' size={22} />
+          <Text style={styles.buttonText}>Enviar sugerencia</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.buttonCancelar} onPress={() => { setSuggestVisible(false); modalRefSuggest.current?.close(); }}>
+          <Text style={styles.buttonTextCancelar}>Cancelar</Text>
+        </TouchableOpacity>
+      </View>
+    </BottomSheetModal>
 
       <BottomSheetModal
         ref={modalRef}
@@ -1251,7 +1325,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: '#333', // Color oscuro
     padding: 16,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
@@ -1262,7 +1335,8 @@ const styles = StyleSheet.create({
     borderBottomColor: '#555', // Color para separar botones
     borderBottomWidth: 1,
     flexDirection:"row",
-    alignItems:"center"
+    alignItems:"center",
+    alignSelf:"center",
   },
   buttonText: {
     color: 'white',
@@ -1311,3 +1385,5 @@ const styles = StyleSheet.create({
     marginLeft: 15,
   },
 });
+
+ 

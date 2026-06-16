@@ -33,17 +33,17 @@ import { collection, deleteDoc, doc, limit, onSnapshot, orderBy, query, startAft
 import TrackPlayer from 'react-native-track-player';
 
 export default function History() {
-  const [allTransactions, setAllTransactions] = useState([]);
-  const [secciones, setSecciones] = useState([]);
-  const [seccionesVisibles, setSeccionesVisibles] = useState({});
-  const [datosAgrupados, setDatosAgrupados] = useState([]);
-  const { icon, setIcon, musica, setMusica, colorA, setColorA, playlistSongs, setPlaylistSongs, estado2, modoReproduccion, setModoReproduccion, currentIndexRef, currentTrack, setCurrentTrack, setCurrentIndex, reproduciendoD, setReproduciendoD } = useApp();
-  const [dondeA, setDondeA] = useState([]);
+  const [allTransactions, setAllTransactions] = useState<any[]>([]);
+  const [secciones, setSecciones] = useState<{ title: string; data: any[] }[]>([]);
+  const [seccionesVisibles, setSeccionesVisibles] = useState<Record<string, boolean>>({});
+  const [datosAgrupados, setDatosAgrupados] = useState<Record<string, any[]>>({});
+  const { icon, setIcon, musica, setMusica, colorA, setColorA, playlistSongs, setPlaylistSongs, estado2, setEstado, modoReproduccion, setModoReproduccion, currentIndexRef, currentTrack, setCurrentTrack, setCurrentIndex, reproduciendoD, setReproduciendoD } = useApp();
+  const [dondeA, setDondeA] = useState<any>(null);
   const [buttonIsVisible, setIsButtonVisible] = useState(true);
   const [dateA, setDateA] = useState("");
   const { uid, loading } = useAuth();
 
-  const [index, setIndex] = useState();
+  const [index, setIndex] = useState<number | undefined>(undefined);
   const [actualizado, setActualizado] = useState(false);
 
   const appState = useRef(AppState.currentState);
@@ -66,7 +66,7 @@ export default function History() {
   }, [seccionesVisibles,datosAgrupados]);
 
 
-    const toggleSeccion = (clave) => {
+    const toggleSeccion = (clave: string) => {
       setSeccionesVisibles((prev) => ({
         ...prev,
         [clave]: !prev[clave],
@@ -74,11 +74,12 @@ export default function History() {
     };
  
   const getHistorial = () => {
-    const q = query(collection(db, 'people', uid,"historyA"),limit(30),orderBy('dateU', 'desc'));
+    if (!uid) return;
+    const q = query(collection(db, 'people', String(uid),"historyA"),limit(30),orderBy('dateU', 'desc'));
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const docs = querySnapshot.docs.map((doc) => doc.data());
+      const docs = querySnapshot.docs.map((doc) => doc.data() as any);
       setDondeA(querySnapshot.docs[querySnapshot.docs.length - 1]);
-      const todo = docs;
+      const todo = docs as any[];
       const datosAgrupados = agruparPorFecha(todo);
       const secciones = Object.keys(datosAgrupados).map((titulo) => ({
         title: titulo,
@@ -93,9 +94,9 @@ export default function History() {
     });
   }
 
-  const agruparPorFecha = (data) => {
+  const agruparPorFecha = (data: any[]) => {
   const hoy = dayjs().startOf("day");
-  const grupos = {};
+  const grupos: Record<string, any[]> = {};
 
   data.forEach((item) => {
     const fecha = dayjs(item.dateU.toDate()).startOf("day");
@@ -121,11 +122,12 @@ export default function History() {
 };
 
 const getMoreHistorial =async () => {
-  const q = query(collection(db, 'people', uid,"historyA"),orderBy('dateU', 'desc'),limit(15),startAfter(dondeA));
+  if (!uid || !dondeA) return;
+  const q = query(collection(db, 'people', String(uid),"historyA"),orderBy('dateU', 'desc'),limit(15),startAfter(dondeA));
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const docs = querySnapshot.docs.map((doc) => doc.data());
+      const docs = querySnapshot.docs.map((doc) => doc.data() as any);
 
-      var todo = allTransactions.concat(docs)
+      var todo = allTransactions.concat(docs as any[])
       const datosAgrupados = agruparPorFecha(todo);
       const secciones = Object.keys(datosAgrupados).map((titulo) => ({
         title: titulo,
@@ -139,66 +141,77 @@ const getMoreHistorial =async () => {
     });
 }
 
-  const errase = async(name) => {
+  const errase = async(name: string) => {
     const ref = doc(db, "people", uid,"historyA",name);
     await deleteDoc(ref)
   }
 
-   const change = async (uri, name, autor, img, generos,letra,dominant,index) => {  
+   const change = async (uri: any, name: string, autor: string, img: string, generos: any, letra: any, dominant: any, index: number) => {  
       console.log("indice Change",index,"||",currentIndexRef.current)
             try {
               // Verificamos si el archivo existe
               const nombreArchivo = name+".mp3"
               const rutaLocal = `${FileSystem.documentDirectory}${nombreArchivo}`;
               const fileInfo = await FileSystem.getInfoAsync(rutaLocal);
+              const trackData = {
+                title: name,
+                artist: autor,
+                artwork: img,
+                url: Array.isArray(uri)?uri[0]:uri,
+                vid: Array.isArray(uri)?uri[1]:null,
+                generos,
+                letra,
+                qplaylist: "Historial",
+                donde: "Historial",
+                dominantColor: dominant,
+                isLocal: fileInfo.exists,
+              };
+              setMusica([name,autor,img,uri,generos,letra,"Historial",dominant]);
+              setCurrentTrack(trackData);
+              setEstado(true);
               if (fileInfo.exists) {
                 console.log("ex")
-                setMusica([name,autor,img,uri,generos,letra,"Historial",dominant])
                 await TrackPlayer.load({
                   id: index,
                   url: rutaLocal,
-                  vid: Array.isArray(uri)?uri[1]:null,
-                  title: name,
-                  artist: autor,
-                  artwork: img,
-                  dominantColor: dominant,
-                  generos: generos,
-                  letra: letra,
-                  qplaylist:"Historial",
-                  donde:"Historial",
+                  vid: trackData.vid,
+                  title: trackData.title,
+                  artist: trackData.artist,
+                  artwork: trackData.artwork,
+                  dominantColor: trackData.dominantColor,
+                  generos: trackData.generos,
+                  letra: trackData.letra,
+                  qplaylist: trackData.qplaylist,
+                  donde: trackData.donde,
                   isLocal: true
                 })
-                await TrackPlayer.play();
               } else {
                 console.log("noex")
-                try {
-                  setMusica([name,autor,img,uri,generos,letra,"Historial",dominant])
-                  await TrackPlayer.load({
+                await TrackPlayer.load({
                   id: index,
-                  url: Array.isArray(uri)?uri[0]:uri,
-                  vid: Array.isArray(uri)?uri[1]:null,
-                  title: name,
-                  artist: autor,
-                  artwork: img,
-                  dominantColor: dominant,
-                  generos: generos,
-                  letra: letra,
-                  qplaylist:"Historial",
-                  donde:"Historial",
+                  url: trackData.url,
+                  vid: trackData.vid,
+                  title: trackData.title,
+                  artist: trackData.artist,
+                  artwork: trackData.artwork,
+                  dominantColor: trackData.dominantColor,
+                  generos: trackData.generos,
+                  letra: trackData.letra,
+                  qplaylist: trackData.qplaylist,
+                  donde: trackData.donde,
                   isLocal: false
                 })
-                await TrackPlayer.play();
-                } catch (error) {
-                  ToastAndroid.showWithGravity(
-                    "Error al reproducir la canción",
-                    ToastAndroid.SHORT,
-                    ToastAndroid.BOTTOM // Cambiado a la parte inferior de la pantalla
-                  );
-                }
               }
-             currentIndexRef.current = index;
+              await TrackPlayer.play();
+              setIcon('pause');
+              currentIndexRef.current = index;
             } catch (error) {
               console.error('Error al verificar el archivo:', error);
+              ToastAndroid.showWithGravity(
+                "Error al reproducir la canción",
+                ToastAndroid.SHORT,
+                ToastAndroid.BOTTOM
+              );
             }
         };
         
@@ -221,7 +234,7 @@ const getMoreHistorial =async () => {
     };
   }, []);
 
-  const renderItem = ({ item, i, index }) => {
+  const renderItem = ({ item, index }: { item: any; index: number }) => {
     var color = "white";
     var dateA = item.dateS.slice(16,21)
 
@@ -297,7 +310,7 @@ const getMoreHistorial =async () => {
 
   };
 
-  const handleScroll = (event) => {
+  const handleScroll = (event: any) => {
     const offsetY = event.nativeEvent.contentOffset.y;
     const isLastMessageVisible = offsetY !== 0;
 
@@ -305,7 +318,7 @@ const getMoreHistorial =async () => {
     
   };
 
-  const onViewableItemsChanged = useRef(({ viewableItems }) => {
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: Array<any> }) => {
     try {
       if (viewableItems.length > 0) {
         const firstVisibleItem = viewableItems[viewableItems.length-1];
@@ -368,10 +381,11 @@ const getMoreHistorial =async () => {
           </TouchableOpacity>
         )}
         ListFooterComponent={
-          allTransactions.length !== 0 &&
-          <TouchableOpacity style={{ width: "25%", alignSelf: "center", marginBottom: 150 }} onPress={getMoreHistorial}>
-            <Text style={{ fontSize: 13, fontWeight: "bold", color: "white" }}>Cargar más...</Text>
-          </TouchableOpacity>
+          allTransactions.length !== 0 ? (
+            <TouchableOpacity style={{ width: "25%", alignSelf: "center", marginBottom: 150 }} onPress={getMoreHistorial}>
+              <Text style={{ fontSize: 13, fontWeight: "bold", color: "white" }}>Cargar más...</Text>
+            </TouchableOpacity>
+          ) : null
         }
         ListEmptyComponent={
           <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>

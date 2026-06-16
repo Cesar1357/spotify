@@ -295,7 +295,7 @@ export default function Settings() {
         <Text style={{ fontSize: 20, marginLeft: 5, height: 40, color: '#A7A7A7', alignItems: "center", alignContent: "center", alignSelf: "center", borderTopWidth: 1, borderColor: "gray" }}>Es todo por el momento</Text>
         </View>
         <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-        <Text style={{ fontSize: 10, height: 40, color: '#A7A7A7', alignItems: "center", alignContent: "center", alignSelf: "center" }}>Emperblack | v2.0.7  </Text>
+        <Text style={{ fontSize: 10, height: 40, color: '#A7A7A7', alignItems: "center", alignContent: "center", alignSelf: "center" }}>Emperblack | v3.0.0  </Text>
     </View>
 
     <BottomSheetModal

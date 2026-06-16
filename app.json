@@ -13,14 +13,14 @@
       "runtimeVersion": {
         "policy": "appVersion"
       }
-    }, 
+    },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#111111"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.cesar1357.Spotify", 
+      "package": "com.cesar1357.SpotifyP",
       "runtimeVersion": "3.0.0"
     },
     "web": {
@@ -39,7 +39,8 @@
           "backgroundColor": "#111111"
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true
