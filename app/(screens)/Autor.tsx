@@ -2,16 +2,16 @@ import { Image } from 'expo-image';
 import { useLocalSearchParams } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Alert,
-    AppState,
-    FlatList,
-    Linking,
-    ListRenderItem,
-    StyleSheet,
-    Text,
-    ToastAndroid,
-    TouchableOpacity,
-    View
+  Alert,
+  AppState,
+  FlatList,
+  Linking,
+  ListRenderItem,
+  StyleSheet,
+  Text,
+  ToastAndroid,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import TrackPlayer, { State } from 'react-native-track-player';
 
@@ -28,12 +28,12 @@ import { ExternalLink } from '@/components/ExternalLink';
 import { MotiView } from 'moti';
 
 import Animated, {
-    runOnJS,
-    useAnimatedReaction,
-    useAnimatedScrollHandler,
-    useAnimatedStyle,
-    useSharedValue,
-    withTiming
+  runOnJS,
+  useAnimatedReaction,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming
 } from 'react-native-reanimated';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -96,17 +96,19 @@ export default function Search() {
   }, [authorName]);
 
   useEffect(()=>{
+      let unsubscribe: (() => void) | undefined;
       try{
         console.log("nnnnn",nameA)
         if(uid && db){
             obtener()
             getAutors();      
-            getPlaylists();
+        unsubscribe = getPlaylists();
         }
       }catch(err){
         console.log(err)
       }
-    },[db,uid,nameA])
+      return () => unsubscribe?.();
+    },[uid,authorName])
 
   useAnimatedReaction(
     () => showMiniHeader.value,
@@ -188,6 +190,7 @@ export default function Search() {
       const docs = querySnapshot.docs.map((doc) => doc.data() as any);
       setAllPlaylists(docs)
     }); 
+    return unsubscribe;
 }
 
   const getTransactionsP = async () => {
@@ -534,118 +537,41 @@ useEffect(() => {
 
 
   const getLikesPlaylist = async (playlist: string) => {
-    if (!uid) {
+    if (!uid || !actualS2.name) return;
+    const songRef = doc(db, "people", String(uid), "playlists", playlist, "Likes", actualS2.name);
+    const existingSong = await getDoc(songRef);
+    if (existingSong.exists()) {
+      ToastAndroid.showWithGravity("¡Esta canción ya se encuentra en esta playlist!", ToastAndroid.SHORT, ToastAndroid.BOTTOM);
       return;
     }
-    const q = query(collection(db, "people", String(uid), "playlists", playlist, "Likes"), orderBy('popularity', 'desc'));
-    const docs = await getDocs(q)
-    const a = docs.docs.map(doc => doc.data());
 
-    if (!userAny?.premium) {
-      if(docs.size < 100){
-  
-        var searchLike = a.filter((song) => 
-            song.name.includes(actualS2.name)
-          );
-  
-        if(searchLike.length === 0){
-          var letra = "";
-          letra = actualS2.letra 
-          if(letra===undefined){
-            letra = "";
-          }
-  
-            const ref = doc(db, "people", String(uid), "playlists", playlist, "Likes", actualS2.name);
-            await setDoc(ref, {
-              name:actualS2.name,
-              uri:actualS2.uri,
-              img:actualS2.img,
-              tipo:actualS2.tipo,
-              autor:actualS2.autor,
-              autores: normalizeAuthors(actualS2.autores ?? actualS2.autor),
-              generos:actualS2.generos,
-              letra:letra, 
-              dateU:Timestamp.now().toDate(),
-              popularity: 1,
-            }).then(() => {
-              setVisibleP(false);
-              ToastAndroid.showWithGravity(
-                "Agregada correctamente a "+playlist,
-                ToastAndroid.SHORT,
-                ToastAndroid.BOTTOM // Cambiado a la parte inferior de la pantalla
-              );
-            })
-            .catch((error) => {
-              console.error('Error al actualizar:', error);
-            });    
-          }else{
-            ToastAndroid.showWithGravity(
-              "¡Esta canción ya se encuentra en esta playlist!",
-              ToastAndroid.SHORT,
-              ToastAndroid.BOTTOM // Cambiado a la parte inferior de la pantalla
-            );
-          }
-        }else{
-          ToastAndroid.showWithGravity(
-            "Has alcanzado el número máximo de likes :c",
-            ToastAndroid.SHORT,
-            ToastAndroid.BOTTOM // Cambiado a la parte inferior de la pantalla
-          );
-        }
-      }else{
-  
-        var searchLike = a.filter((song) => 
-            song.name.includes(actualS2.name)
-          );
-  
-        if(searchLike.length === 0){
-          var letra = "";
-          letra = actualS2.letra 
-          if(letra===undefined){
-            letra = "";
-          }
-  
-            const ref = doc(db, "people", String(uid), "playlists", playlist, "Likes", actualS2.name);
-            await setDoc(ref, {
-              name:actualS2.name,
-              uri:actualS2.uri,
-              img:actualS2.img,
-              tipo:actualS2.tipo,
-              autor:actualS2.autor,
-              autores: normalizeAuthors(actualS2.autores ?? actualS2.autor),
-              generos:actualS2.generos,
-              letra:letra, 
-              dateU:Timestamp.now().toDate(),
-              popularity: 1,
-            }).then(() => {
-              setVisibleP(false);
-              ToastAndroid.showWithGravity(
-                "Agregada correctamente a "+playlist,
-                ToastAndroid.SHORT,
-                ToastAndroid.BOTTOM // Cambiado a la parte inferior de la pantalla
-              );
-            })
-            .catch((error) => {
-              console.error('Error al actualizar:', error);
-            });    
-          }else{
-            ToastAndroid.showWithGravity(
-              "¡Esta canción ya se encuentra en esta playlist!",
-              ToastAndroid.SHORT,
-              ToastAndroid.BOTTOM // Cambiado a la parte inferior de la pantalla
-            );
-          }
-      }
-    };
+    const playlistSnapshot = await getDocs(query(collection(db, "people", String(uid), "playlists", playlist, "Likes")));
+    if (userAny?.premium !== true && playlistSnapshot.size >= 100) {
+      ToastAndroid.showWithGravity("Has alcanzado el número máximo de canciones", ToastAndroid.SHORT, ToastAndroid.BOTTOM);
+      return;
+    }
+
+    await setDoc(songRef, {
+      name: actualS2.name,
+      uri: actualS2.uri,
+      img: actualS2.img,
+      tipo: actualS2.tipo ?? "Canción",
+      autor: actualS2.autor,
+      autores: normalizeAuthors(actualS2.autores ?? actualS2.autor),
+      generos: actualS2.generos,
+      letra: actualS2.letra ?? "",
+      dateU: Timestamp.now().toDate(),
+      popularity: 1,
+    });
+    setVisibleP(false);
+    modalRefP.current?.close();
+    ToastAndroid.showWithGravity("Agregada correctamente a " + playlist, ToastAndroid.SHORT, ToastAndroid.BOTTOM);
+  };
 
   
 const renderItem: ListRenderItem<any> = ({ item, index }) => {
   try{
-    var color = "white";
-    if(musica[0] === item.name){
-      color = "green"
-      setIndex(index)
-    }
+    const color = musica[0] === item.name ? "green" : "white";
     
 
     return (
@@ -695,21 +621,15 @@ const renderItem: ListRenderItem<any> = ({ item, index }) => {
 }
 
 const getSongs = (text: string) => {
-    console.log(text)
     setTextB(text)
-    var a = ""
+    const searchText = text.trim().toLowerCase();
 
-      a = text
-
-    if(a === ""){
+    if(searchText === ""){
       setAllSee(songs)
     }else{
-    const songs2 = songs;
-    const findtext = a.toLowerCase();
-
-      var searchData = songs2.filter(
+      const searchData = songs.filter(
         (song) => 
-          song.name.toLowerCase().includes(findtext)
+          song.name.toLowerCase().includes(searchText)
       );
       setAllSee(searchData); 
     }
@@ -867,9 +787,8 @@ const scrollHandler = useAnimatedScrollHandler({
       stackBehavior="replace"
     >
       <BottomSheetView style={{ flex: 1, paddingHorizontal: 16 }}>
-        <Text style={{fontSize:15,textAlign:"center",color:"white",fontWeight:"bold",paddingTop:5}}>
-          Añadir a una Playlist
-        </Text>
+        <Text style={styles.sheetEyebrow}>BIBLIOTECA</Text>
+        <Text style={styles.sheetTitle}>Añadir a una playlist</Text>
 
         <View style={styles.infoRow}>
           <Image source={{ uri: actualS2.img }} style={styles.image} />
@@ -887,8 +806,8 @@ const scrollHandler = useAnimatedScrollHandler({
             showsVerticalScrollIndicator
             ListEmptyComponent={
               <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 50 }}>
-                <Text style={{ fontSize: 20, fontWeight: 'bold', color: 'white' }}>
-                  ¡No tienes más playlists! 
+                  <Text style={styles.emptySheetText}>
+                    No tienes más playlists
                 </Text>
               </View>
             }
@@ -910,7 +829,7 @@ const scrollHandler = useAnimatedScrollHandler({
         handleIndicatorStyle={{ backgroundColor: 'gray' }}
         stackBehavior='replace'
       >
-        <View style={{ paddingHorizontal: 16, flexDirection:"column" }}>
+        <View style={{ paddingHorizontal: 20, paddingTop: 8, flexDirection:"column" }}>
           <View style={styles.infoRow}>
             <Image
               source={{ uri: actualS2.img }}
@@ -923,7 +842,7 @@ const scrollHandler = useAnimatedScrollHandler({
           </View>
 
           <Option icon="add-circle-outline" label="Agregar a una playlist" onPress={() => toggleOverlayP()} />
-          <Option icon="cloud-download-outline" label="Descargar" onPress={() => {descargarYGuardarArchivoLocalmente()}} />
+          <Option icon="cloud-download-outline" label="Descargar para escuchar offline" onPress={() => {descargarYGuardarArchivoLocalmente()}} />
           <ExternalLink style={{}} href={`https://www.google.com/search?q=${musica[0]+" "+musica[1]}`}>
             <View style={styles.option}>
               <Icon type={'ionicon'} name={"globe-outline"} color={"gray"} size={34} />
@@ -989,5 +908,25 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     marginLeft: 15,
+  },
+  sheetEyebrow: {
+    color: '#1DB954',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginTop: 8,
+  },
+  sheetTitle: {
+    color: 'white',
+    fontSize: 24,
+    fontWeight: '800',
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  emptySheetText: {
+    color: '#999',
+    fontSize: 16,
+    textAlign: 'center',
+    marginTop: 50,
   },
 });

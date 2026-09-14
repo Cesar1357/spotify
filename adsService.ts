@@ -14,15 +14,17 @@ export async function loadAds() {
 
     ads = docs.docs.map((doc) => {
       const item = doc.data();
+      const audioUrl = item.uri;
+      const videoUrl = item.uri;
+      const adArtist = 'Anuncio';
       return {
         id: `ad-${item.id || doc.id}`, // usa id del doc si no viene en el objeto
-        url: item.uri,
-        vid: item.uri, // si tienes un campo diferente para video cámbialo
+        url: audioUrl,
+        vid: videoUrl,
         title: item.name,
-        artist: Array.isArray(item.autores) ? item.autores.join(', ') : String(item.autores ?? item.autor ?? ''),
-        autores: Array.isArray(item.autores) ? item.autores : item.autor ? (Array.isArray(item.autor) ? item.autor : [item.autor]) : [],
-        artwork:
-          "https://firebasestorage.googleapis.com/v0/b/spotify-20a57.appspot.com/o/anuncios%2FChatGPT%20Image%2027%20ago%202025%2C%2009_16_23%20p.m..png?alt=media&token=cc4597cd-c5b3-42a1-a2c8-79466ea306c2",
+        artist: Array.isArray(adArtist) ? adArtist.join(', ') : String(adArtist),
+        autores: Array.isArray(adArtist) ? adArtist : [String(adArtist)],
+        artwork: null,
         dominantColor: "#404040",
         qplaylist: "Anuncios",
         donde: "Anuncios",
@@ -42,8 +44,8 @@ export async function playAdBase({ setMusica, setCurrentTrack, setAdT, user, set
   premium = Boolean(user?.premium);
 
 
-  if (ads.length === 0 || user.premium) {
-    console.log("⚠️ No hay anuncios cargados, saltando...", "premium: ", user.premium);
+  if (ads.length === 0 || user?.premium) {
+    console.log("⚠️ No hay anuncios cargados, saltando...", "premium: ", user?.premium);
     await TrackPlayer.skipToNext();
     await TrackPlayer.play();
     return;
@@ -81,6 +83,7 @@ export async function playAdBase({ setMusica, setCurrentTrack, setAdT, user, set
       vid: selectedAd.vid,
       title: selectedAd.title,
       artist: selectedAd.artist,
+      autores: selectedAd.autores,
       artwork: selectedAd.artwork,
       dominantColor: selectedAd.dominantColor,
       qplaylist: "Anuncios",
@@ -88,7 +91,11 @@ export async function playAdBase({ setMusica, setCurrentTrack, setAdT, user, set
       isAd: true,
     }, insertIndex);
     await TrackPlayer.skipToNext();
-    await TrackPlayer.pause();
+    if (selectedAd.vid) {
+      await TrackPlayer.pause();
+    } else {
+      await TrackPlayer.play();
+    }
     console.log("▶️ Anuncio en reproducción:", selectedAd.title);
   }else{
     await TrackPlayer.skipToNext();
@@ -193,7 +200,11 @@ export async function playAd() {
       isAd: true,
     }, insertIndex2);
     await TrackPlayer.skipToNext();
-    await TrackPlayer.play();
+    if (selectedAd.vid) {
+      await TrackPlayer.pause();
+    } else {
+      await TrackPlayer.play();
+    }
     
     console.log("▶️ Anuncio en reproducción2:", selectedAd.title);
     return;

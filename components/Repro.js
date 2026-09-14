@@ -4,6 +4,7 @@ import {
   Image,
   Keyboard,
   Text,
+  ToastAndroid,
   TouchableOpacity,
   View
 } from 'react-native';
@@ -19,6 +20,7 @@ import { collection, deleteDoc, doc, getDoc, increment, onSnapshot, query, setDo
 import TrackPlayer, { Event, State, useProgress } from 'react-native-track-player';
 import { db } from '../config/firebase';
 import { useApp } from '../context/AppContext';
+import { formatAuthors } from '../utils/authors';
 
 export default function Repro() {
   const [iconLC, setIconLC] = useState("white");
@@ -38,6 +40,12 @@ export default function Repro() {
   const [progress, setProgress] = useState(0);
   const lastUpdatedRef = useRef(null);
   const lastUpdateTimeRef = useRef(null);
+  const playbackModeRef = useRef(modoReproduccion);
+  const singleLoopRef = useRef(singleLoop);
+  const reproducingFromRef = useRef(reproduciendoD);
+  playbackModeRef.current = modoReproduccion;
+  singleLoopRef.current = singleLoop;
+  reproducingFromRef.current = reproduciendoD;
 
   useFocusEffect(
     // Callback should be wrapped in `React.useCallback` to avoid running the effect too often.
@@ -63,7 +71,7 @@ export default function Repro() {
     setProgress(xd)
   },[position,duration])
   
-  const updateNumber2 = (name,uri,autor,img,generos,letra,dominant,qplaylist,autores) => {
+  const updateNumber2 = async (name,uri,autor,img,generos,letra,dominant,qplaylist,autores) => {
       console.log("funcion de updateNumber2");
       try{
         const now = dayjs();
@@ -75,7 +83,7 @@ export default function Repro() {
 
         const newSeconds = decenas + unidadesRedondeadas;
 
-        var date = now.set("second", newSeconds).format("ddd MMM DD YYYY HH:mm:ss").concat(name);
+        const date = now.set("second", newSeconds).format("ddd MMM DD YYYY HH:mm:ss").concat(name);
         let letra1 = letra ?? "";
         let dominant1 = dominant ?? "";
         
@@ -102,22 +110,21 @@ export default function Repro() {
             console.log('Reproducción guardada en historyA:', name);
           })
 
-        console.log("actualizando reproducciones en Repro ya seguro", "qplay:",qplaylist)
-        try{
-          if(qplaylist.length < 28 ){
-            const ref = doc(db, "people", uid,"playlists",qplaylist,"Likes",name);
-              updateDoc(ref, {
-                popularity:increment(1)
-              }).then(() => {
-                console.log('Actualización exitosa de Repro:', name);
-              })
-              .catch((error) => {
-                console.error('Error al actualizar:', error);
-              });
-            }
-          }catch(err){
-            console.log("no se pudo actualizar la popularidad en Repro, probablemente no exista la canción en Likes", err)
+        const globalRef = doc(db, "musica", name);
+        const globalSnapshot = await getDoc(globalRef);
+        if (globalSnapshot.exists()) {
+          await updateDoc(globalRef, { popularity: increment(1) });
+        }
+
+        const systemSources = new Set(["Likes", "Inicio", "Search", "Historial", "Descargas", "Anuncios", ""]);
+        const isPlaylistSource = typeof qplaylist === "string" && !systemSources.has(qplaylist);
+        if (isPlaylistSource && uid) {
+          const playlistRef = doc(db, "people", uid, "playlists", qplaylist, "Likes", name);
+          const playlistSnapshot = await getDoc(playlistRef);
+          if (playlistSnapshot.exists()) {
+            await updateDoc(playlistRef, { popularity: increment(1) });
           }
+        }
           
     
           
@@ -133,7 +140,7 @@ export default function Repro() {
       if (trackId !== null) {
         const track = await TrackPlayer.getTrack(trackId);
         if(track){
-          setMusica([track.title,track.artist,track.artwork,[track.url,track.vid],track.generos,track.letra,track.donde,track.dominantColor]);
+          setMusica([track.title,formatAuthors(track.autores ?? track.artist),track.artwork,[track.url,track.vid],track.generos,track.letra,track.donde,track.dominantColor]);
           if(track.isAd && pathname !== "/ReproGrande"){
             console.log("despausando anuncio porque no esta en reprogrande")
             TrackPlayer.play();
@@ -169,7 +176,13 @@ export default function Repro() {
     const trackChangeListener = TrackPlayer.addEventListener(Event.PlaybackTrackChanged, async (e) => {
       if (e.nextTrack != null) {
         const track = await TrackPlayer.getTrack(e.nextTrack);
-        setMusica([track.title,track.artist,track.artwork,[track.url,track.vid],track.generos,track.letra,reproduciendoD,track.dominantColor]);
+        if (!track || !track.url) {
+          console.error('Pista inválida en la cola:', e.nextTrack, track);
+          await TrackPlayer.skipToNext().catch(() => TrackPlayer.stop());
+          ToastAndroid.show('No se pudo reproducir esta canción', ToastAndroid.SHORT);
+          return;
+        }
+        setMusica([track.title,formatAuthors(track.autores ?? track.artist),track.artwork,[track.url,track.vid],track.generos,track.letra,reproducingFromRef.current,track.dominantColor]);
         console.log("||Repro",track.title,"path",pathname); 
         setCurrentTrack(track);
         if(track){
@@ -198,14 +211,14 @@ export default function Repro() {
         setIcon('play');
       }
       if (state === State.Ended) {
-        console.log("endedRepro", modoReproduccion, "singleLoop:", singleLoop);
+        console.log("endedRepro", playbackModeRef.current, "singleLoop:", singleLoopRef.current);
         setAdT(false);
-        if (singleLoop) {
+        if (singleLoopRef.current) {
           // Force repeat current
           await TrackPlayer.seekTo(0);
           await TrackPlayer.play();
         } else {
-          switch (modoReproduccion) {
+          switch (playbackModeRef.current) {
             case 0:
               await TrackPlayer.reset();
               setEstado(false);
@@ -248,7 +261,7 @@ export default function Repro() {
     console.error('Error al obtener la pista actual:', error);
   }
   
-}, [estado,modoReproduccion,reproduciendoD, pathname, lastUpdateTimeRef, lastUpdatedRef]);
+}, [pathname]);
 
 const _playAndPause = async () => {
     try {

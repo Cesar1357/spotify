@@ -1,44 +1,43 @@
 import NetInfo from '@react-native-community/netinfo';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Alert,
-    FlatList,
-    Image,
-    StyleSheet,
-    Text,
-    TextInput,
-    ToastAndroid,
-    TouchableOpacity,
-    View,
+  Alert,
+  FlatList,
+  Image,
+  StyleSheet,
+  Text,
+  ToastAndroid,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { Icon } from 'react-native-elements';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/hooks/useAuth';
-import { BottomSheetBackdrop, BottomSheetModal } from '@gorhom/bottom-sheet/src';
+import { BottomSheetBackdrop, BottomSheetModal, BottomSheetScrollView, BottomSheetTextInput } from '@gorhom/bottom-sheet/src';
 import { router } from 'expo-router';
 import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, orderBy, query, setDoc, Timestamp, updateDoc, writeBatch } from "firebase/firestore";
 import { db } from '../../config/firebase';
 
 export default function Biblioteca() {
-    const [user, setUser] = useState();
-    const [lists, setLists] = useState([{"name":"Descargas"}]);
+    const [user, setUser] = useState<any>(null);
+    const [lists, setLists] = useState<any[]>([{name:"Descargas"}]);
     const [visible, setVisible] = useState(false);
     const [visible2, setVisible2] = useState(false);
     const [NA,setNA] = useState("");
-    const [PE,setPE] = useState();
+    const [PE,setPE] = useState<boolean>(false);
     const [internet, setInternet] = useState(true)
     const [Nnombre, setNnombre] = useState("");
     const { uid, loading, displayname } = useAuth();
 
     const modalRef = useRef<BottomSheetModal>(null);
     const modalRef2 = useRef<BottomSheetModal>(null);
-    const snapPoints = useMemo(() => ['30%', '30%'], []);
-    const snapPoints2 = useMemo(() => ['30%', '30%'], []);
+    const snapPoints = useMemo(() => ['38%', '52%'], []);
+    const snapPoints2 = useMemo(() => ['55%', '55%'], []);
 
 
   useEffect(() => {
-    let unsubscribe;
+    let unsubscribe: (() => void) | undefined;
 
     const checkInternetConnection = async () => {
       if (!uid) return;
@@ -75,7 +74,7 @@ const getUser = async() => {
 }
 
 
-    const renderItem = ({ item, i }) => {
+    const renderItem = ({ item }: { item: any }) => {
         if(item.name === "Descargas"){
         return(
             <TouchableOpacity style={styles.container2} onPress={() => router.push({
@@ -125,9 +124,9 @@ const getUser = async() => {
         }
     }
 
-const toggleOverlay =async (v) => {
+const toggleOverlay = async (v = false) => {
     if(visible === false && !v){
-      if(user.premium === true){
+      if(user?.premium === true){
         setVisible(true);
         modalRef.current?.present()
       }else{
@@ -145,7 +144,7 @@ const toggleOverlay =async (v) => {
     }
     
   };
-  const toggleOverlay2 = (name,estado,v) => {
+  const toggleOverlay2 = (name = '', estado = false, v = false) => {
     if(visible2 === false && !v){
       setNA(name)
       setPE(estado)
@@ -159,20 +158,22 @@ const toggleOverlay =async (v) => {
   };
 
 const createPlay = () => {
-  if(Nnombre.length !== 0 && Nnombre !== "Descargas"){
-    var nombres = []
+  const playlistName = Nnombre.trim();
+  if(playlistName.length !== 0 && playlistName !== "Descargas"){
+    const nombres: string[] = [];
     lists.map((a)=>{
       nombres.push(a.name.toLowerCase())
     })
-    if(!nombres.includes(Nnombre.toLowerCase())){
-      const gamesCollection = doc(db, "people", uid,"playlists",Nnombre);
+    if(!nombres.includes(playlistName.toLowerCase())){
+      const gamesCollection = doc(db, "people", uid,"playlists",playlistName);
       setDoc(gamesCollection,{
-        name: Nnombre,
+        name: playlistName,
         uri:"https://firebasestorage.googleapis.com/v0/b/spotify-20a57.appspot.com/o/music%2Fimage%20(1).png?alt=media&token=ff5ca481-48cf-4433-a0c9-e8f7ff855c16",
         importance:0,
         estado:false
       }).then((a)=>{
         setVisible(false);
+        setNnombre("");
         modalRef.current?.close();
         ToastAndroid.showWithGravity(
           `Playlist creada correctamente`,
@@ -194,24 +195,24 @@ const delet = async() => {
     const q = query(collection(db, "people",uid,"playlists",NA,"Likes"));
     const docs = await getDocs(q);
     const data = docs.docs.map(doc => doc.data());
-    data.forEach(async (doc) => {
-      await deleteDoc(doc);
-    });
+    await Promise.all(data.map((playlistSong) =>
+      deleteDoc(doc(db, "people", uid, "playlists", NA, "Likes", playlistSong.name))
+    ));
     
-    const q2 = query(doc(db, "people",uid,"playlists",NA));
-    await deleteDoc(q2)
+    const playlistRef = doc(db, "people",uid,"playlists",NA);
+    await deleteDoc(playlistRef)
 
         
         if(PE === true){
-         var n = uid+"_"+NA
+         const n = uid+"_"+NA
          const q = query(collection(db, "playlists",n,NA));
           const docs = await getDocs(q);
           const data = docs.docs.map(doc => doc.data());
-          data.forEach(async (doc) => {
-            await deleteDoc(doc);
-          });
-          const q2 = query(doc(db, "playlists",n));
-          await deleteDoc(q2)
+          await Promise.all(data.map((playlistSong) =>
+            deleteDoc(doc(db, "playlists", n, NA, playlistSong.name))
+          ));
+          const publicPlaylistRef = doc(db, "playlists",n);
+          await deleteDoc(publicPlaylistRef)
 
           const q3 = doc(db, "people",uid,"playlists",NA);
           await updateDoc(q3,{
@@ -237,8 +238,8 @@ const delet = async() => {
   
 }
 
-const actualizar = async(name) =>{
-   var n = uid+"_"+name 
+const actualizar = async(name: string) =>{
+  const n = uid+"_"+name 
 
    const q = query(collection(db, "people",uid,"playlists",name,"Likes"),orderBy("dateU", 'desc'));
     const docs = await getDocs(q);
@@ -248,10 +249,10 @@ const actualizar = async(name) =>{
 
             // Itera sobre la lista de documentos
             a.forEach((documentData) => {
-              var namec = documentData.name;
+              const namec = documentData.name;
               // Añade documentos al lote
               const documentRef = doc(db, 'playlists', n, name, namec);
-              setDoc(documentRef, documentData, { merge: true });
+              batch.set(documentRef, documentData, { merge: true });
             });
 
             // Escribe el lote
@@ -267,13 +268,13 @@ const actualizar = async(name) =>{
           setVisible2(false)
 }
 
-const toglePublish = async(name) => { 
+const toglePublish = async(name: string) => { 
   if(PE === false){
     const q = query(collection(db, "people",uid,"playlists",name,"Likes"),orderBy("dateU", 'desc'));
     const docs = await getDocs(q);
     const a = docs.docs.map(doc => doc.data());
 
-      var n = uid+"_"+name 
+      const n = uid+"_"+name 
       const gamesCollection = doc(db, "playlists", n);
       setDoc(gamesCollection, {
         by:uid,
@@ -299,10 +300,10 @@ const toglePublish = async(name) => {
 
       // Itera sobre la lista de documentos
       a.forEach((documentData) => {
-        var namec = documentData.name;
+        const namec = documentData.name;
         // Añade documentos al lote
         const documentRef = doc(db, 'playlists', n, name, namec);
-        setDoc(documentRef, documentData, { merge: true });
+        batch.set(documentRef, documentData, { merge: true });
       });
 
       // Escribe el lote
@@ -316,13 +317,13 @@ const toglePublish = async(name) => {
     );  
   }else{
 
-    var n = uid+"_"+name 
+    const n = uid+"_"+name 
     const q = query(collection(db, "playlists",n,name));
     const docs = await getDocs(q);
     const data = docs.docs.map(doc => doc.data());
-    data.forEach(async (doc) => {
-      await deleteDoc(doc);
-    });
+    await Promise.all(data.map((playlistSong) =>
+      deleteDoc(doc(db, "playlists", n, name, playlistSong.name))
+    ));
 
     const ref = doc(db, "playlists", n);
     deleteDoc(ref)
@@ -377,21 +378,22 @@ const toglePublish = async(name) => {
         <BottomSheetModal
           ref={modalRef}
           index={1}
-          snapPoints={snapPoints}
+          snapPoints={['45%', '75%']}
           enableDynamicSizing={false}
-          detached={true}
-          containerStyle={{width:"80%",marginLeft:"10%"}}
-          style={{marginTop:-300}}
-          keyboardBehavior='extend'
+          keyboardBehavior='interactive'
+          keyboardBlurBehavior='restore'
+          android_keyboardInputMode='adjustResize'
           backdropComponent={BottomSheetBackdrop}
           onDismiss={()=>toggleOverlay(true)}
           backgroundStyle={{ backgroundColor: '#111' }}
           handleIndicatorStyle={{ backgroundColor: 'gray' }}
           stackBehavior='replace'
         >
-          <View style={{ paddingHorizontal: 16, flexDirection:"column" }}>
-            <Text style={{color:"white",fontSize:30}}>Crear nueva playlist</Text>
-            <TextInput
+          <BottomSheetScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 32 }} keyboardShouldPersistTaps="handled">
+            <Text style={styles.sheetEyebrow}>BIBLIOTECA</Text>
+            <Text style={styles.sheetTitle}>Crear nueva playlist</Text>
+            <Text style={styles.sheetHint}>Organiza tus canciones como quieras.</Text>
+            <BottomSheetTextInput
               style={{
                 backgroundColor: 'white',
                 fontWeight: 'bold',
@@ -414,10 +416,10 @@ const toglePublish = async(name) => {
               keyboardAppearance={"dark"}
               keyboardType={"web-search"}
             />
-          <TouchableOpacity style={{alignSelf:"center",marginTop:25,backgroundColor:"green",borderRadius:5}} onPress={(()=> createPlay())}>
-            <Text style={{color: 'black',fontSize:30,fontWeight: 'bold'}}> Crear </Text> 
+          <TouchableOpacity style={styles.primaryButton} onPress={(()=> createPlay())}>
+            <Text style={styles.primaryButtonText}>Crear playlist</Text> 
           </TouchableOpacity>
-        </View>
+          </BottomSheetScrollView>
       </BottomSheetModal>
 
       <BottomSheetModal
@@ -425,18 +427,19 @@ const toglePublish = async(name) => {
           index={1}
           snapPoints={snapPoints2}
           enableDynamicSizing={false}
-          detached={true}
-          containerStyle={{width:"80%",marginLeft:"10%"}}
-          style={{marginTop:-300}}
-          keyboardBehavior='extend'
+          keyboardBehavior='interactive'
+          keyboardBlurBehavior='restore'
+          android_keyboardInputMode='adjustResize'
           backdropComponent={BottomSheetBackdrop}
-          onDismiss={()=>toggleOverlay2(true)}
+          onDismiss={()=>toggleOverlay2('', false, true)}
           backgroundStyle={{ backgroundColor: '#111' }}
           handleIndicatorStyle={{ backgroundColor: 'gray' }}
           stackBehavior='replace'
         >
-          <View style={{ paddingHorizontal: 16, flexDirection:"column" }}>
-           <Text style={{color:"white",fontSize:30,textAlign:"center"}}>Borrar playlist</Text>
+          <View style={{ paddingHorizontal: 20, paddingTop: 8, flexDirection:"column" }}>
+           <Text style={styles.sheetEyebrow}>GESTIONAR PLAYLIST</Text>
+           <Text style={styles.sheetTitle}>Administrar playlist</Text>
+           <Text style={styles.sheetHint}>{NA}</Text>
             <TouchableOpacity style={{alignSelf:"center",marginTop:20,borderRadius:100,borderWidth:1,borderColor:"white",width:40,height:40,marginBottom:10}}  onPress={(()=>Alert.alert("Eliminar","¿Seguro?", [
           {
             text: 'Si',
@@ -449,12 +452,12 @@ const toglePublish = async(name) => {
                   <Icon type={'ionicon'} name={'trash'} color={'red'} size={25} style={{alignSelf:"center",marginTop:5}}/>
             </TouchableOpacity>
 
-            {PE? <TouchableOpacity style={{backgroundColor:"green",borderRadius:30,marginTop:20,alignSelf:"center",alignItems:"center",padding:5}} onPress={()=>actualizar(NA)}>
+            {PE? <TouchableOpacity style={styles.secondaryButton} onPress={()=>actualizar(NA)}>
               <Text style={{fontSize:17,fontWeight:"bold",color:"black"}}>Actualizar</Text> 
             </TouchableOpacity>
             : null}
 
-            <TouchableOpacity style={{backgroundColor:"green",borderRadius:30,marginTop:10,alignSelf:"center",alignItems:"center",padding:5}} onPress={()=>toglePublish(NA)}>
+            <TouchableOpacity style={styles.secondaryButton} onPress={()=>toglePublish(NA)}>
             {PE? <Text style={{fontSize:17,fontWeight:"bold",color:"black"}}>Ocultar</Text> : <Text style={{fontSize:17,fontWeight:"bold",color:"black"}}>Publicar</Text>   }
             
             </TouchableOpacity>
@@ -512,5 +515,46 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: "white",
     fontWeight: 'bold',
+  },
+  sheetEyebrow: {
+    color: '#1DB954',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  sheetTitle: {
+    color: 'white',
+    fontSize: 26,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+  sheetHint: {
+    color: '#999',
+    fontSize: 14,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  primaryButton: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    backgroundColor: '#1DB954',
+    borderRadius: 12,
+    marginTop: 20,
+    paddingVertical: 13,
+  },
+  primaryButtonText: {
+    color: '#07140b',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  secondaryButton: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    backgroundColor: '#252525',
+    borderColor: '#3a3a3a',
+    borderRadius: 12,
+    borderWidth: 1,
+    marginTop: 12,
+    paddingVertical: 12,
   },
 });

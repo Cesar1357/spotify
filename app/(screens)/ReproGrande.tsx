@@ -44,8 +44,10 @@ import TrackPlayer, { Event, State, useProgress } from 'react-native-track-playe
 import { db } from '../../config/firebase';
 import { useApp } from '../../context/AppContext';
 import { formatAuthors, normalizeAuthors, type AuthorValue } from '../../utils/authors';
+import { buildPlaybackQueue } from '../../utils/playbackQueue';
 
 type AnyObject = { [key: string]: any };
+const LOCAL_AD_ARTWORK = require('../../assets/images/icon.png');
 
 function delay(n: number){
   return new Promise(function(resolve){
@@ -114,21 +116,23 @@ export default function Repro() {
   const parsedLyrics = useMemo(() => {
     if (!musica[5] || typeof musica[5] !== 'string') return [];
     return musica[5]
-      .split('/n')
+      .split(/\r?\n|\/n/)
       .map((line) => {
-        const match = line.match(/^(\d+(?:\.\d+)?)\|(.*)$/);
-        return match ? { time: parseFloat(match[1]), text: match[2].trim() } : null;
+        const match = line.trim().match(/^\s*(\d+(?:\.\d+)?)\s*\|\s*(.*?)\s*$/);
+        return match && match[2] ? { time: Number(match[1]), text: match[2] } : null;
       })
-      .filter((item) => item !== null);
+      .filter((item): item is { time: number; text: string } => item !== null)
+      .sort((lineA, lineB) => lineA.time - lineB.time);
   }, [musica[5]]);
 
   useEffect(() => {
     setCurrentLyric(parsedLyrics);
   }, [parsedLyrics]);
   const [videoTime, setVideoTime] = useState(0);
+  const [videoError, setVideoError] = useState<string | null>(null);
 
   const [currentLyric, setCurrentLyric] = useState<Array<{time:number;text:string}>>([])
-  var window = Dimensions.get("window")
+  const window = Dimensions.get("window");
 
   const [modalVisible, setModalVisible] = useState(false);
   const [visibleP, setVisibleP] = useState(false);
@@ -138,8 +142,8 @@ export default function Repro() {
   const [ind, setInd] = useState(0)
   const [descargando, setDescargando] = useState(false)
   const [user, setUser] = useState<any>(null);
-  var qplaylist2 = qplaylist ? qplaylist.includes("_") : false;
-  var qplaylist3 = qplaylist2 ? "Likes" : qplaylist
+  const qplaylist2 = qplaylist ? qplaylist.includes("_") : false;
+  const qplaylist3 = qplaylist2 ? "Likes" : qplaylist;
 
 
   const [tipo, setTipo] = useState(false)
@@ -167,6 +171,8 @@ export default function Repro() {
   const modalRefP = useRef<BottomSheetModal>(null);
   const modalRefQueue = useRef<BottomSheetModal>(null);
   const [visibleQueue, setVisibleQueue] = useState(false);
+  const [savingPlaylist, setSavingPlaylist] = useState(false);
+  const [queueTracks, setQueueTracks] = useState<AnyObject[]>([]);
   const currentIndexRef2 = useRef(-1); // Guarda el índice anterior
 
   const snapPoints = useMemo(() => ['25%', '45%'], []);
@@ -425,6 +431,13 @@ export default function Repro() {
             setCurrentTrack(track);
             if(track.isAd){
               setTipo(true);
+              if (track.vid) {
+                await TrackPlayer.pause();
+                setIsPaused(true);
+              } else {
+                await TrackPlayer.play();
+                setIsPaused(false);
+              }
             }else{
               setTipo(false);
             }
@@ -470,6 +483,18 @@ export default function Repro() {
       const trackChangeListener = TrackPlayer.addEventListener(Event.PlaybackTrackChanged, async (e) => {
         if (e.nextTrack != null) {
           const track = await TrackPlayer.getTrack(e.nextTrack);
+          if (!track || !track.url) {
+            console.error('Pista inválida en ReproGrande:', e.nextTrack, track);
+            await TrackPlayer.skipToNext().catch(() => TrackPlayer.stop());
+            ToastAndroid.show('No se pudo reproducir esta canción', ToastAndroid.SHORT);
+            return;
+          }
+          setIsVideoReady(false);
+          setVideoError(null);
+          setVideoTime(0);
+          setBuffering(false);
+          setBuffering2(false);
+          setConexionLenta(0);
           if (e.track != null) {
             const trackA = await TrackPlayer.getTrack(e.track);
             if(track){
@@ -494,6 +519,13 @@ export default function Repro() {
               
               if(track.isAd){
                 setTipo(true);
+                if (track.vid) {
+                  await TrackPlayer.pause();
+                  setIsPaused(true);
+                } else {
+                  await TrackPlayer.play();
+                  setIsPaused(false);
+                }
               }else{
                 setTipo(false);
               }
@@ -517,7 +549,7 @@ export default function Repro() {
       console.error('Error al obtener la pista actual:', error);
     }
     
-  }, [currentIndexRef,estado,modoReproduccion]);
+  }, [pathname]);
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined = undefined;
@@ -592,7 +624,7 @@ export default function Repro() {
       const adUri = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTkM03yVebiMnBH5Kn2h3XazhS4sAIxn3w6w&s";
       const profiles = await Promise.all(authorNames.map(async (authorName) => {
         if (authorName === "Anuncio") {
-          return { name: authorName, uri: adUri, descripcion: "Video corto de entretenimiento", tipo: "Artista" };
+          return { name: authorName, uri: adUri, isAd: true, descripcion: "Video corto de entretenimiento", tipo: "Artista" };
         }
 
         try {
@@ -713,58 +745,23 @@ const like = () => {
     }
   };
 
-  // --- Playlist helpers (unificado con Playlist.tsx logic) ---
-  const shufflePlaylist = (playlist: AnyObject[]) => {
-    const copy = [...playlist];
-    for (let i = copy.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [copy[i], copy[j]] = [copy[j], copy[i]];
-    }
-    return copy;
-  };
-
-  const buildPlaylistQueue = (playlist: AnyObject[], mode: number, currentTrackObject: AnyObject | null) => {
-    if (!Array.isArray(playlist) || playlist.length === 0) return [];
-
-    const activeIndex = currentTrackObject
-      ? playlist.findIndex((item) => item.id === currentTrackObject.id || item.title === currentTrackObject.title || item.name === currentTrackObject.title)
-      : -1;
-
-    if (mode === 3) {
-      // loop: keep current track only
-      return currentTrackObject ? [] : [playlist[0]];
-    }
-
-    if (mode === 2) {
-      const remaining = playlist.filter((_, index) => index !== activeIndex);
-      return shufflePlaylist(remaining);
-    }
-
-    if (mode === 0) {
-      return currentTrackObject ? [] : [playlist[0]];
-    }
-
-    // mode === 1 (ordered): start from next of active or full list
-    return activeIndex >= 0 ? playlist.slice(activeIndex + 1) : playlist;
-  };
-
   const normalizeTrack = (item: AnyObject) => {
     // Ensure the track has the fields TrackPlayer expects (url, title, artist, artwork, id)
     const url = item.url ?? (Array.isArray(item.uri) ? item.uri[0] : item.uri) ?? item.audio ?? item.src ?? null;
+    if (!url) throw new Error(`La canción "${item.title ?? item.name ?? 'desconocida'}" no tiene URL de audio`);
     const title = item.title ?? item.name ?? '';
     const authors = normalizeAuthors(item.autores ?? item.autor ?? item.artist);
     const artist = formatAuthors(authors);
     const artwork = item.artwork ?? item.img ?? item.art ?? undefined;
     const id = item.id ?? undefined;
     const out: AnyObject = {
+      ...item,
       ...(id !== undefined ? { id } : {}),
       url,
       title,
       artist,
       autores: authors,
       artwork,
-      // keep extra metadata
-      ...item,
     };
     return out;
   };
@@ -774,7 +771,7 @@ const like = () => {
 
     const currentTrackId = await TrackPlayer.getCurrentTrack();
     const isPlayingTrackLoaded = currentTrackId !== null;
-    const queue = buildPlaylistQueue(playlist, mode, isPlayingTrackLoaded ? currentTrack : null);
+    const queue = buildPlaybackQueue(playlist, mode as 0 | 1 | 2 | 3, isPlayingTrackLoaded ? currentTrack : null);
 
     if (isPlayingTrackLoaded && preserveCurrent) {
       await TrackPlayer.removeUpcomingTracks();
@@ -908,6 +905,18 @@ const openLink = (nameA: string, autor: string) => {
       setVisibleQueue(false);
       modalRefQueue.current?.close();
     } else {
+      TrackPlayer.getQueue().then((tracks) => {
+        TrackPlayer.getCurrentTrack().then((activeIndex) => {
+          setQueueTracks(
+            tracks
+              .map((track, index) => ({ ...track, queueIndex: index }))
+              .filter((_, index) => index !== activeIndex),
+          );
+        });
+      }).catch((error) => {
+        console.error("Error cargando la cola:", error);
+        setQueueTracks([]);
+      });
       setVisibleQueue(true);
       modalRefQueue.current?.present();
     }
@@ -939,7 +948,8 @@ const openLink = (nameA: string, autor: string) => {
 };
 
   async function descargarYGuardarArchivoLocalmente() {
-    if(!descargando){
+    if (!descargando) {
+      setDescargando(true);
       const nombreArchivo = musica[0]+".mp3";
       console.log(nombreArchivo)
 
@@ -958,17 +968,21 @@ const openLink = (nameA: string, autor: string) => {
             onPress: () => console.log('Cancel Pressed'),
             style: 'cancel',
           }],{cancelable: true})
+          setDescargando(false);
           return; // Salir de la función si la canción ya está descargada
         }
 
       try {
-        var dateU = Date.now()
-        const cancion = {"name":musica[0],"img":musica[2],"autor":musica[1],"letra":musica[5],"dateU":dateU};
+        const dateU = Date.now();
+        const cancion = {"name":musica[0],"img":musica[2],"autor":musica[1],"autores":normalizeAuthors(currentTrack?.autores ?? musica[1]),"letra":musica[5],"dateU":dateU};
 
         const fileInfo = await FileSystem.downloadAsync(
           Array.isArray(musica[3])? musica[3][0] : musica[3], // URL del archivo
           FileSystem.documentDirectory + nombreArchivo // Ruta local de destino
         );
+        if (fileInfo.status < 200 || fileInfo.status >= 300) {
+          throw new Error(`La descarga respondió con HTTP ${fileInfo.status}`);
+        }
 
         try {
           // Agrega la canción a la lista
@@ -995,14 +1009,15 @@ const openLink = (nameA: string, autor: string) => {
           ToastAndroid.BOTTOM // Cambiado a la parte inferior de la pantalla
         );
       }
-    }else{
+    } else {
       Alert.alert("Ya se está descargando...")
     }
+    setDescargando(false);
 }
 
 const renderPlaylist = useCallback(
     ({ item }: { item: AnyObject }) => (
-  <TouchableOpacity style={{padding:8,flexDirection:"row"}} onPress={() => getLikesPlaylist(item.name)}>
+  <TouchableOpacity disabled={savingPlaylist} style={{padding:8,flexDirection:"row",opacity:savingPlaylist ? 0.6 : 1}} onPress={() => getLikesPlaylist(item.name)}>
         <View style={{flexDirection:"row"}}>
           <Image
             source={{ uri: item.uri }} 
@@ -1028,120 +1043,51 @@ const renderPlaylist = useCallback(
         </View>
       </TouchableOpacity>
    ),
-    []
+    [savingPlaylist, uid, musica[0], currentTrack]
   );
 
 const getLikesPlaylist = async (playlist: string) => {
-  const q = query(collection(db, "people",uid,"playlists",playlist,"Likes"), orderBy('popularity', 'desc'));
-  const docs = await getDocs(q)
-  const a = docs.docs.map(doc => doc.data());
+  if (!uid || !musica[0] || savingPlaylist) return;
+  setSavingPlaylist(true);
 
-  if(user.premium === false){
-    if(docs.size < 100){
-      var searchLike = a.filter((song) => 
-          song.name.includes(musica[0])
-        );
-
-      if(searchLike.length === 0){
-        var letra = "";
-        var dominant = ""
-        letra = musica[5]
-        dominant = musica[7]
-        if(letra===undefined){
-          letra = "";
-        }
-        if(dominant === undefined){
-          dominant = ""
-        }
-
-          const ref = doc(db, "people", uid,"playlists",playlist,"Likes",musica[0]);
-          await setDoc(ref, {
-            name:musica[0],
-            uri:musica[3],
-            img:musica[2],
-            tipo:"Canción",
-            autor:musica[1],
-            autores: normalizeAuthors(currentTrack?.autores ?? musica[1]),
-            generos:musica[4],
-            dominantColor:dominant,
-            letra:letra, 
-            dateU:Timestamp.now().toDate(),
-            popularity: 1,
-          }).then(() => {
-            setVisibleP(false);
-            ToastAndroid.showWithGravity(
-              "Agregada correctamente a "+playlist,
-              ToastAndroid.SHORT,
-              ToastAndroid.BOTTOM // Cambiado a la parte inferior de la pantalla
-            );
-          })
-          .catch((error) => {
-            console.error('Error al actualizar:', error);
-          });    
-        }else{
-          ToastAndroid.showWithGravity(
-            "¡Esta canción ya se encuentra en esta playlist!",
-            ToastAndroid.SHORT,
-            ToastAndroid.BOTTOM // Cambiado a la parte inferior de la pantalla
-          );
-        }
-      }else{
-        ToastAndroid.showWithGravity(
-          "Has alcanzado el número máximo de likes :c",
-          ToastAndroid.SHORT,
-          ToastAndroid.BOTTOM // Cambiado a la parte inferior de la pantalla
-        );
-      }
-    }else{
-      var searchLike = a.filter((song) => 
-          song.name.includes(musica[0])
-        );
-
-      if(searchLike.length === 0){
-        var letra = "";
-        var dominant = ""
-        letra = musica[5]
-        dominant = musica[7]
-        if(letra===undefined){
-          letra = "";
-        }
-        if(dominant === undefined){
-          dominant = ""
-        }
-
-          const ref = doc(db, "people", uid,"playlists",playlist,"Likes",musica[0]);
-          await setDoc(ref, {
-            name:musica[0],
-            uri:musica[3],
-            img:musica[2],
-            tipo:"Canción",
-            autor:musica[1],
-            autores: normalizeAuthors(currentTrack?.autores ?? musica[1]),
-            generos:musica[4],
-            dominantColor:dominant,
-            letra:letra, 
-            dateU:Timestamp.now().toDate(),
-            popularity: 1,
-          }).then(() => {
-            setVisibleP(false);
-            ToastAndroid.showWithGravity(
-              "Agregada correctamente a "+playlist,
-              ToastAndroid.SHORT,
-              ToastAndroid.BOTTOM // Cambiado a la parte inferior de la pantalla
-            );
-          })
-          .catch((error) => {
-            console.error('Error al actualizar:', error);
-          });    
-        }else{
-          ToastAndroid.showWithGravity(
-            "¡Esta canción ya se encuentra en esta playlist!",
-            ToastAndroid.SHORT,
-            ToastAndroid.BOTTOM // Cambiado a la parte inferior de la pantalla
-          );
-        }
+  try {
+    const playlistSongsRef = collection(db, "people", uid, "playlists", playlist, "Likes");
+    const existingSongRef = doc(playlistSongsRef, String(musica[0]));
+    const existingSong = await getDoc(existingSongRef);
+    if (existingSong.exists()) {
+      ToastAndroid.showWithGravity("¡Esta canción ya se encuentra en esta playlist!", ToastAndroid.SHORT, ToastAndroid.BOTTOM);
+      return;
     }
-  };
+
+    const playlistSnapshot = await getDocs(playlistSongsRef);
+    if (user?.premium !== true && playlistSnapshot.size >= 100) {
+      ToastAndroid.showWithGravity("Has alcanzado el número máximo de canciones :c", ToastAndroid.SHORT, ToastAndroid.BOTTOM);
+      return;
+    }
+
+    await setDoc(existingSongRef, {
+      name: musica[0],
+      uri: musica[3],
+      img: musica[2],
+      tipo: "Canción",
+      autor: musica[1],
+      autores: normalizeAuthors(currentTrack?.autores ?? musica[1]),
+      generos: musica[4],
+      dominantColor: musica[7] ?? "",
+      letra: musica[5] ?? "",
+      dateU: Timestamp.now().toDate(),
+      popularity: 1,
+    });
+    setVisibleP(false);
+    modalRefP.current?.close();
+    ToastAndroid.showWithGravity("Agregada correctamente a " + playlist, ToastAndroid.SHORT, ToastAndroid.BOTTOM);
+  } catch (error) {
+    console.error("Error agregando la canción a la playlist:", error);
+    ToastAndroid.showWithGravity("No se pudo agregar la canción", ToastAndroid.SHORT, ToastAndroid.BOTTOM);
+  } finally {
+    setSavingPlaylist(false);
+  }
+};
   
   const cancionSiguiente = async() => {
     setIsVideoReady(false);
@@ -1169,15 +1115,31 @@ const getLikesPlaylist = async (playlist: string) => {
       setTipo((tipo)=>!tipo)
   }
 
-  const handleVideoLoad = (data: any) => {
+  const handleVideoLoad = async (data: any) => {
     console.log('Video cargado:', data.duration);
     setIsVideoReady(true); // Video listo para mostrar
+    if ((AdT || currentTrack?.isAd) && !localStateP && currentTrack?.vid) {
+      await TrackPlayer.seekTo(0);
+      await TrackPlayer.play().catch((error) => console.error('Error iniciando anuncio:', error));
+      setIsPaused(false);
+    }
+  };
+
+  const handleVideoError = (error: any) => {
+    const message = error?.error?.localizedDescription ?? error?.error?.errorString ?? 'No se pudo cargar el video';
+    console.error('Error cargando video:', error);
+    setVideoError(message);
+    setIsVideoReady(false);
+    if (currentTrack?.isAd) {
+      TrackPlayer.play().catch((playbackError) => console.error('Error reproduciendo anuncio:', playbackError));
+      setIsPaused(false);
+    }
   };
 
   // Callback cuando el video está bufferizando
   const handleBuffer = async ({ isBuffering }: { isBuffering: boolean }) => {
     console.log('Video bufferizando:', isBuffering, "isVideoReady:", isVideoReady, "tipo:", tipo,"path: ",pathname, "local:",localStateP);
-    if (isBuffering && pathname === "/ReproGrande" && tipo &&  currentTrack?.vid) {
+    if (isBuffering && pathname === "/ReproGrande" && tipo && currentTrack?.vid && !localStateP) {
       console.log('Video bufferizando, pausando audio');
       await TrackPlayer.pause();
       setBuffering2(true);
@@ -1256,6 +1218,7 @@ const getLikesPlaylist = async (playlist: string) => {
                     ref={videoRef}
                     poster={require('../../assets/images/icon.png')}
                     onLoad={handleVideoLoad}  // Controlar cuándo el video está cargado
+                    onError={handleVideoError}
                     onBuffer={handleBuffer} // Controlar el buffer
                     onPlaybackStateChanged={handleStatusUpdateV}
                     paused={isPaused}
@@ -1270,6 +1233,11 @@ const getLikesPlaylist = async (playlist: string) => {
                       zIndex:999
                     }}
                   />
+                  {videoError && AdT ? (
+                    <Text style={{ color: '#ccc', textAlign: 'center', marginTop: 90, paddingHorizontal: 20 }}>
+                      No se pudo cargar el video del anuncio
+                    </Text>
+                  ) : null}
                   {user?.extra?.subtitulos && isVideoReady && tipo && !AdT ? (
                 <View style={{}}>
                   <>
@@ -1283,7 +1251,7 @@ const getLikesPlaylist = async (playlist: string) => {
                 </View>
 
                   <AnimatedR.Image
-                  source={{ uri: musica[2] }}
+                  source={AdT ? require('../../assets/images/icon.png') : { uri: musica[2] }}
                   style={{
                     width: window.width - 60,
                     height: window.width - 60,
@@ -1304,7 +1272,7 @@ const getLikesPlaylist = async (playlist: string) => {
             ) : (
 
                 <AnimatedR.Image
-                  source={{ uri: musica[2] }}
+                  source={AdT ? require('../../assets/images/icon.png') : { uri: musica[2] }}
                   style={{
                     width: window.width - 60,
                     height: window.width - 60,
@@ -1486,9 +1454,9 @@ const getLikesPlaylist = async (playlist: string) => {
                     alignSelf: 'center',
                   }}
                 >
-                  {artista.uri && (
+                  {(artista.uri || artista.isAd) && (
                     <Image
-                      source={{ uri: artista.uri }}
+                      source={artista.isAd ? LOCAL_AD_ARTWORK : { uri: artista.uri }}
                       style={{ width: window.width - 40, height: 250, borderTopLeftRadius: 20, borderTopRightRadius: 20, opacity: 0.8 }}
                       contentFit="cover"
                     />
@@ -1703,7 +1671,7 @@ const getLikesPlaylist = async (playlist: string) => {
         </Text>
 
         <View style={styles.infoRow}>
-          <Image source={{ uri: musica[2] }} style={styles.image} />
+          <Image source={AdT ? require('../../assets/images/icon.png') : { uri: musica[2] }} style={styles.image} />
           <View style={{ marginLeft: 10 }}>
             <Text style={styles.title} numberOfLines={1}>{musica[0]}</Text>
             <Text style={styles.subtitle} numberOfLines={1}>{musica[1]}</Text>
@@ -1740,22 +1708,20 @@ const getLikesPlaylist = async (playlist: string) => {
     >
       <BottomSheetView style={{ flex: 1, paddingHorizontal: 16 }}>
         <Text style={{fontSize:15,textAlign:"center",color:"white",fontWeight:"bold",paddingTop:5}}>
-          Próximas canciones
+          Cola de reproducción
+        </Text>
+        <Text style={{fontSize:12,textAlign:"center",color:"#999",paddingTop:4}}>
+          Toca una canción para reproducirla ahora
         </Text>
         <View style={{marginTop:10}} />
         <BottomSheetFlatList
-          data={buildPlaylistQueue(playlistSongs, modoReproduccion, currentTrack)}
-          keyExtractor={(item, index) => (item.id ?? index).toString()}
+          data={queueTracks}
+          keyExtractor={(item, index) => `${item.id ?? item.title}-${index}`}
+          ListEmptyComponent={<Text style={{color:"#aaa",textAlign:"center",marginTop:30}}>No hay canciones próximas</Text>}
           renderItem={({item, index}) => (
                   <TouchableOpacity onPress={async () => {
               try{
-                if (item.id !== undefined) {
-                  await TrackPlayer.skip(item.id);
-                } else {
-                  // fallback: reset and add this track first
-                  await TrackPlayer.reset();
-                  await TrackPlayer.add(normalizeTrack(item) as any);
-                }
+                await TrackPlayer.skip(item.queueIndex);
                 setVisibleQueue(false);
                 modalRefQueue.current?.close();
               }catch(err){console.log(err)}
@@ -1782,7 +1748,7 @@ const getLikesPlaylist = async (playlist: string) => {
         <View style={{ paddingHorizontal: 16, flexDirection:"column" }}>
           <View style={styles.infoRow}>
             <Image
-              source={{ uri: musica[2] }}
+              source={AdT ? require('../../assets/images/icon.png') : { uri: musica[2] }}
               style={styles.image}
             />
             <View style={{ marginLeft: 10 }}>

@@ -33,6 +33,7 @@ import Repro from '../../components/Repro'; // Asegúrate de que esté en esta r
 import { db } from '../../config/firebase';
 import { useApp } from '../../context/AppContext';
 import { formatAuthors, normalizeAuthors, type AuthorValue } from '../../utils/authors';
+import { buildPlaybackQueue } from '../../utils/playbackQueue';
 
 import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, orderBy, query, setDoc, Timestamp, writeBatch } from "firebase/firestore";
 
@@ -398,43 +399,6 @@ export default function Search() {
         }
       };
 
-  const shufflePlaylist = (playlist: Track[]) : Track[] => {
-    const copy = [...playlist];
-    for (let i = copy.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [copy[i], copy[j]] = [copy[j], copy[i]];
-    }
-    return copy;
-  };
-
-  const buildPlaylistQueue = (playlist: Track[], mode: number, currentTrackObject?: Track | null): Track[] => {
-    if (!Array.isArray(playlist) || playlist.length === 0) {
-      return [];
-    }
-
-    const activeIndex = currentTrackObject
-      ? playlist.findIndex(
-          (item) => item.id === currentTrackObject.id || item.title === currentTrackObject.title
-        )
-      : -1;
-
-    if (mode === 3) {
-      return currentTrackObject ? [] : [playlist[0]];
-    }
-
-    if (mode === 2) {
-      const remaining = playlist.filter((item, index) => index !== activeIndex);
-      return shufflePlaylist(remaining);
-    }
-
-    if (mode === 0) {
-      return currentTrackObject ? [] : [playlist[0]];
-    }
-
-    // mode === 1 or fallback order mode
-    return activeIndex >= 0 ? playlist.slice(activeIndex + 1) : playlist;
-  };
-
   const loadPlaylist = async (playlist: Track[] | any, mode = 0, preserveCurrent = false): Promise<void> => {
     if (!Array.isArray(playlist) || playlist.length === 0) {
       return;
@@ -442,10 +406,11 @@ export default function Search() {
 
     const currentTrackId = await TrackPlayer.getCurrentTrack();
     const isPlayingTrackLoaded = currentTrackId !== null;
-    const queue = buildPlaylistQueue(playlist, mode, isPlayingTrackLoaded ? currentTrack : null);
+    const queue = buildPlaybackQueue(playlist, mode as 0 | 1 | 2 | 3, isPlayingTrackLoaded ? currentTrack : null);
 
     const normalizeTrack = (item: any) => {
       const url = item.url ?? (Array.isArray(item.uri) ? item.uri[0] : item.uri) ?? item.audio ?? item.src ?? null;
+      if (!url) throw new Error(`La canción "${item.title ?? item.name ?? 'desconocida'}" no tiene URL de audio`);
         const authors = normalizeAuthors(item.autores ?? item.autor ?? item.artist);
       return {
         ...item,
@@ -959,124 +924,43 @@ const renderItem = ({ item, index }: { item: any; index: number }) => {
         </View>
       </TouchableOpacity>
    ),
-    []
+    [uid, actualS2.name, user?.premium]
   );
 
 const getLikesPlaylist = async (playlist: string) => {
-  const q = query(collection(db, "people",uid,"playlists",playlist,"Likes"), orderBy('popularity', 'desc'));
-  const docs = await getDocs(q)
-  const a = docs.docs.map(doc => doc.data());
+  if (!uid || !actualS2.name) return;
 
-  if(user.premium === false){
-    if(docs.size < 100){
+  const playlistSongsRef = collection(db, "people", uid, "playlists", playlist, "Likes");
+  const existingSongRef = doc(playlistSongsRef, String(actualS2.name));
+  const existingSong = await getDoc(existingSongRef);
+  if (existingSong.exists()) {
+    ToastAndroid.showWithGravity("¡Esta canción ya se encuentra en esta playlist!", ToastAndroid.SHORT, ToastAndroid.BOTTOM);
+    return;
+  }
 
-      var searchLike = a.filter((song) => 
-          song.name.includes(actualS2.name)
-        );
+  const playlistSnapshot = await getDocs(playlistSongsRef);
+  if (user?.premium !== true && playlistSnapshot.size >= 100) {
+    ToastAndroid.showWithGravity("Has alcanzado el número máximo de canciones :c", ToastAndroid.SHORT, ToastAndroid.BOTTOM);
+    return;
+  }
 
-      if(searchLike.length === 0){
-        var letra = "";
-        var dominant = ""
-        letra = actualS2.letra
-        dominant = actualS2.dominantColor
-        if(letra===undefined){
-          letra = "";
-        }
-        if(dominant === undefined){
-          dominant = ""
-        }
-
-          const ref = doc(db, "people", uid,"playlists",playlist,"Likes",actualS2.name);
-          await setDoc(ref, {
-            name:actualS2.name,
-            uri:actualS2.uri,
-            img:actualS2.img,
-            tipo:actualS2.tipo,
-            autor:actualS2.autor,
-            autores: normalizeAuthors(actualS2.autores ?? actualS2.autor),
-            generos:actualS2.generos,
-            dominantColor:dominant,
-            letra:letra, 
-            dateU:Timestamp.now().toDate(),
-            popularity: 1,
-          }).then(() => {
-            setActualS2({}) 
-            setVisibleP(false);
-            ToastAndroid.showWithGravity(
-              "Agregada correctamente a "+playlist,
-              ToastAndroid.SHORT,
-              ToastAndroid.BOTTOM // Cambiado a la parte inferior de la pantalla
-            );
-          })
-          .catch((error) => {
-            console.error('Error al actualizar:', error);
-          });    
-        }else{
-          ToastAndroid.showWithGravity(
-            "¡Esta canción ya se encuentra en esta playlist!",
-            ToastAndroid.SHORT,
-            ToastAndroid.BOTTOM // Cambiado a la parte inferior de la pantalla
-          );
-        }
-      }else{
-        ToastAndroid.showWithGravity(
-          "Has alcanzado el número máximo de likes :c",
-          ToastAndroid.SHORT,
-          ToastAndroid.BOTTOM // Cambiado a la parte inferior de la pantalla
-        );
-      }
-    }else{
-
-      var searchLike = a.filter((song) => 
-          song.name.includes(actualS2.name)
-        );
-
-      if(searchLike.length === 0){
-        var letra = "";
-        var dominant = ""
-        letra = actualS2.letra
-        dominant = actualS2.dominantColor
-        if(letra===undefined){
-          letra = "";
-        }
-        if(dominant === undefined){
-          dominant = ""
-        }
-
-          const ref = doc(db, "people", uid,"playlists",playlist,"Likes",actualS2.name);
-          await setDoc(ref, {
-            name:actualS2.name,
-            uri:actualS2.uri,
-            img:actualS2.img,
-            tipo:actualS2.tipo,
-            autor:actualS2.autor,
-            autores: normalizeAuthors(actualS2.autores ?? actualS2.autor),
-            generos:actualS2.generos,
-            dominantColor:dominant,
-            letra:letra, 
-            dateU:Timestamp.now().toDate(),
-            popularity: 1,
-          }).then(() => {
-            setActualS2({}) 
-            setVisibleP(false);
-            ToastAndroid.showWithGravity(
-              "Agregada correctamente a "+playlist,
-              ToastAndroid.SHORT,
-              ToastAndroid.BOTTOM // Cambiado a la parte inferior de la pantalla
-            );
-          })
-          .catch((error) => {
-            console.error('Error al actualizar:', error);
-          });    
-        }else{
-          ToastAndroid.showWithGravity(
-            "¡Esta canción ya se encuentra en esta playlist!",
-            ToastAndroid.SHORT,
-            ToastAndroid.BOTTOM // Cambiado a la parte inferior de la pantalla
-          );
-        }
-    }
-  };
+  await setDoc(existingSongRef, {
+    name: actualS2.name,
+    uri: actualS2.uri,
+    img: actualS2.img,
+    tipo: actualS2.tipo ?? "Canción",
+    autor: actualS2.autor,
+    autores: normalizeAuthors(actualS2.autores ?? actualS2.autor),
+    generos: actualS2.generos,
+    dominantColor: actualS2.dominantColor ?? "",
+    letra: actualS2.letra ?? "",
+    dateU: Timestamp.now().toDate(),
+    popularity: 1,
+  });
+  setActualS2({});
+  setVisibleP(false);
+  ToastAndroid.showWithGravity("Agregada correctamente a " + playlist, ToastAndroid.SHORT, ToastAndroid.BOTTOM);
+};
 
 
 const activateA = async () => {

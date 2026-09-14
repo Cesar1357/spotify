@@ -42,6 +42,13 @@
 
 ## Fase 3: biblioteca, Playlist y acciones
 
+- Progreso: agregar canciones a una playlist ahora usa identificadores exactos, evita duplicados por nombre y conserva `autores`.
+- Progreso: se unificó el límite de 100 canciones para cuentas no premium desde Playlist y ReproGrande.
+- Progreso: ReproGrande ya no usa un callback obsoleto al seleccionar playlists; muestra guardado, errores y evita pulsaciones duplicadas.
+- Progreso: el botón de lista abre la cola real de TrackPlayer, permite saltar a una canción y muestra un estado vacío claro.
+- Progreso: las reproducciones fuera de una playlist ya no intentan actualizar `Likes/{nombre}`; actualizan solo la canción global y reservan la copia de playlist para orígenes reales.
+- Progreso: Autor y Biblioteca corrigieron listeners, borrado/publicación de playlists, filtros durante render y batches de Firestore.
+- Progreso: los bottom sheets de Autor y Biblioteca tienen paneles de ancho completo, jerarquía visual y acciones más claras.
 - Auditar agregar/quitar canciones, duplicados, limites premium, playlists publicas y sincronizacion offline.
 - Unificar el modelo de playlist y las acciones de bottom sheets.
 - Corregir identificadores de documentos, estados optimistas y listeners de Firestore.
@@ -49,6 +56,15 @@
 
 ## Fase 4: ReproGrande y experiencia de reproduccion
 
+- Progreso: se centralizó la construcción de colas en `utils/playbackQueue.ts` para que Playlist y ReproGrande compartan los mismos modos.
+- Progreso: los listeners de TrackPlayer ya no se recrean con cada cambio de estado o modo; leen esos valores mediante refs y se limpian al cambiar de ruta.
+- Progreso: al cambiar de pista se reinician video, buffer y latencia; el buffer ya no pausa audio si el usuario lo tenía pausado.
+- Progreso: los anuncios toleran usuarios no cargados y conservan `autores` en toda la pista enviada a TrackPlayer.
+- Progreso: las descargas de ReproGrande bloquean concurrencia, validan respuestas HTTP y guardan `autores` para uso offline.
+- Progreso: el parser de letras acepta saltos de línea reales y el formato legado `"/n"`.
+- Progreso: las pistas sin URL se detectan antes de entrar a la cola y los eventos inválidos muestran error e intentan continuar con la siguiente canción.
+- Progreso: los anuncios normalizan audio/video desde campos nuevos o el `uri` legado, usan el perfil local `Anuncio` y arrancan automáticamente al cargar el video.
+- Progreso: los anuncios con video esperan a que `react-native-video` cargue antes de iniciar TrackPlayer, evitando audio adelantado y desincronización.
 - Extraer el estado del reproductor a un servicio/controlador unico.
 - Definir claramente los modos: orden, aleatorio, repetir cola y repetir pista.
 - Corregir cola, siguiente/anterior, restauracion de pista y sincronizacion entre TrackPlayer y video.
@@ -58,6 +74,7 @@
 
 ## Fase 5: calidad, rendimiento y seguridad
 
+- Progreso: se eliminaron los errores `no-var` que bloqueaban el lint de ReproGrande; quedan advertencias de limpieza y dependencias de hooks para una pasada posterior.
 - Tipar las entidades de pista, autor, playlist, anuncio y usuario.
 - Añadir una capa de acceso a Firestore con consultas reutilizables y validacion de datos.
 - Reducir lecturas repetidas y cachear perfiles de autores, artwork y metadatos.
