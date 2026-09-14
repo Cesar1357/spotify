@@ -42,6 +42,12 @@
 
 ## Fase 3: biblioteca, Playlist y acciones
 
+- Progreso: el encabezado de Playlist ahora muestra el total de canciones y sus controles tienen áreas táctiles y feedback más claros.
+- Progreso: Search ahora muestra el total de resultados activos y sus filas tienen feedback táctil consistente.
+- Progreso: Search muestra tarjetas dinámicas de hasta quince géneros por defecto; el historial y resultados aparecen al enfocar el buscador.
+- Progreso: las tarjetas de género ahora se muestran en un grid vertical de dos columnas y la X del buscador devuelve el estado de exploración.
+- Progreso: el grid de géneros carga progresivamente en lotes de 20 hasta el límite disponible de 200, evitando montar todas las tarjetas de golpe.
+- Progreso: el modal de creación de Biblioteca abre expandido, enfoca el input y sincroniza su snap mínimo/máximo con la visibilidad del teclado.
 - Progreso: agregar canciones a una playlist ahora usa identificadores exactos, evita duplicados por nombre y conserva `autores`.
 - Progreso: se unificó el límite de 100 canciones para cuentas no premium desde Playlist y ReproGrande.
 - Progreso: ReproGrande ya no usa un callback obsoleto al seleccionar playlists; muestra guardado, errores y evita pulsaciones duplicadas.
@@ -75,6 +81,8 @@
 ## Fase 5: calidad, rendimiento y seguridad
 
 - Progreso: se eliminaron los errores `no-var` que bloqueaban el lint de ReproGrande; quedan advertencias de limpieza y dependencias de hooks para una pasada posterior.
+- Progreso: Settings ya no aporta errores TypeScript; se protegieron datos de usuario opcionales y se tiparon sus estados de preferencias.
+- Progreso: se corrigieron los errores de aplicación en sesión, Search, ParallaxScrollView y la exportación del servicio de TrackPlayer; TypeScript queda limitado a diagnósticos internos de Bottom Sheet/invariant.
 - Tipar las entidades de pista, autor, playlist, anuncio y usuario.
 - Añadir una capa de acceso a Firestore con consultas reutilizables y validacion de datos.
 - Reducir lecturas repetidas y cachear perfiles de autores, artwork y metadatos.

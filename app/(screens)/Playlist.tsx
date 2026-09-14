@@ -12,18 +12,18 @@ import { ExternalLink } from '@/components/ExternalLink';
 import { BottomSheetBackdrop, BottomSheetFlatList, BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet/src';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Alert,
-    BackHandler,
-    Dimensions,
-    FlatList,
-    Keyboard,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    ToastAndroid,
-    TouchableOpacity,
-    View
+  Alert,
+  BackHandler,
+  Dimensions,
+  FlatList,
+  Keyboard,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  ToastAndroid,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { Icon } from 'react-native-elements';
 import { Modal, Searchbar } from 'react-native-paper';
@@ -104,7 +104,7 @@ export default function Search() {
   const modalRefP = useRef<BottomSheetModal>(null);
   const modalRefD = useRef<BottomSheetModal>(null);
   const modalRefPO = useRef<BottomSheetModal>(null);
-  const snapPoints = useMemo(() => ['25%', '45%'], []);
+  const snapPoints = useMemo(() => ['50%', '50%'], []);
   const snapPoints2 = useMemo(() => ['40%', '40%'], []);
   const snapPoints3 = useMemo(() => ['15%', '25%'], []);
   const snapPoints4 = useMemo(() => ['40%', '40%'], []);
@@ -723,14 +723,16 @@ async function descargarYGuardarArchivoLocalmente() {
 
   const deleteCFP = async() => {
     const ref = doc(db, "people", String(uid),"playlists", String(qp),"Likes", String(actualS2.name));
-    await deleteDoc(ref).then((e)=>{
+    await deleteDoc(ref).then(()=>{
       ToastAndroid.showWithGravity(
         "Canción eliminada de esta playlist correctamente",
         ToastAndroid.SHORT,
         ToastAndroid.BOTTOM // Cambiado a la parte inferior de la pantalla
       );
     })
-    setModalVisible(false)
+    setModalVisible(false);
+    modalRef.current?.close();
+    setActualS2({});
   }
 
   const toggleOverlayP = () => {
@@ -957,8 +959,8 @@ const getLikesPlaylist = async (playlist: string) => {
     dateU: Timestamp.now().toDate(),
     popularity: 1,
   });
-  setActualS2({});
   setVisibleP(false);
+  modalRefP.current?.close();
   ToastAndroid.showWithGravity("Agregada correctamente a " + playlist, ToastAndroid.SHORT, ToastAndroid.BOTTOM);
 };
 
@@ -1168,10 +1170,10 @@ const activateA = async () => {
       <View style={styles.upperContainer}>
       <View style={{flexDirection:"row",justifyContent:"space-between",width:"100%"}}>
         <View style={{flexDirection:"row",alignItems:"center"}}>
-          <TouchableOpacity style={{}} onPress={(()=>toggleOverlay2())}>
+          <TouchableOpacity hitSlop={8} activeOpacity={0.7} style={{}} onPress={(()=>toggleOverlay2())}>
             <Text
               style={{
-                fontSize: 25,
+                fontSize: 23,
                 marginLeft: 5,
                 color: 'white',
                 fontWeight: 'bold',
@@ -1192,19 +1194,22 @@ const activateA = async () => {
               </Text>
             </TouchableOpacity>
             :null}
-          <TouchableOpacity style={{marginLeft:5}} onPress={()=>{searchRef.current?.focus()}}>
+          <Text style={styles.songCount}>
+            {allSee.length} canciones
+          </Text>
+          <TouchableOpacity hitSlop={8} activeOpacity={0.7} style={{marginLeft:8}} onPress={()=>{searchRef.current?.focus()}}>
             <Icon type={'material'} name={"search"} color={"gray"} size={28} />
           </TouchableOpacity>
         </View>
         
-        <View style={{flexDirection:"row",marginRight:10,alignItems:"center",justifyContent:"flex-end"}}>
-          <TouchableOpacity style={{}} onPress={(()=>cambiarF())}>
+        <View style={styles.headerActions}>
+          <TouchableOpacity hitSlop={8} activeOpacity={0.7} style={{}} onPress={(()=>cambiarF())}>
             <Icon type={'ionicon'} name={"filter"} color={"white"} size={28} />
           </TouchableOpacity>
-          <TouchableOpacity style={{marginLeft:10}} onPress={(()=>activateA())}>
+          <TouchableOpacity hitSlop={8} activeOpacity={0.7} style={{marginLeft:10}} onPress={(()=>activateA())}>
             <Icon type={'material'} name={modoReproduccion === 3?"repeat":modoReproduccion === 2?"shuffle-on":modoReproduccion === 1?"shuffle":modoReproduccion === 0?"shuffle":"shuffle"} color={modoReproduccion === 0?"white":"green"} size={34} />
           </TouchableOpacity>
-          <TouchableOpacity style={{marginLeft:10}} onPress={(()=>_playAndPause())}>
+          <TouchableOpacity hitSlop={8} activeOpacity={0.7} style={{marginLeft:10}} onPress={(()=>_playAndPause())}>
             <Icon type={'ionicon'} name={icon === "play"?"play-circle":"pause-circle"} color={"green"} size={60} />
           </TouchableOpacity>
         </View>
@@ -1237,19 +1242,19 @@ const activateA = async () => {
         ListEmptyComponent={
           lists.length === 0 ? (
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontSize: 20, fontWeight: 'bold', color: 'white', marginTop: dimen.height / 3 }}>
+              <Text style={styles.emptyTitle}>
                 ¡No tienes canciones!
               </Text>
-              <Text style={{ fontSize: 18, fontWeight: 'bold', color: 'gray' }}>
+              <Text style={styles.emptySubtitle}>
                 Agrega algunas para llenarlo
               </Text>
             </View>
           ) : (
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontSize: 20, fontWeight: 'bold', color: 'white', marginTop: dimen.height / 3 }}>
+              <Text style={styles.emptyTitle}>
                 ¡No encontramos esta canción!
               </Text>
-              <Text style={{ fontSize: 18, fontWeight: 'bold', color: 'gray' }}>
+              <Text style={styles.emptySubtitle}>
                 :(
               </Text>
             </View>
@@ -1270,10 +1275,10 @@ const activateA = async () => {
         keyboardShouldPersistTaps={'always'}
         ListEmptyComponent={
             <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ fontSize: 20, fontWeight: "bold", color: "white", marginTop:dimen.height/3 }}>
+              <Text style={styles.emptyTitle}>
                 ¡No tienes canciones descargadas!
               </Text>
-              <Text style={{ fontSize: 18, fontWeight: "bold", color: "gray" }}>
+              <Text style={styles.emptySubtitle}>
                 Descarga algunas para llenarlo
               </Text>
             </View>
@@ -1348,6 +1353,7 @@ const activateA = async () => {
             <Text style={{color:"gray",fontSize:14,textAlign:"center",marginTop:5,fontWeight:"bold"}}>{dateAP}</Text>
           </View>
       </BottomSheetModal> 
+
       <BottomSheetModal
         ref={modalRef}
         index={1}
@@ -1359,7 +1365,7 @@ const activateA = async () => {
         onDismiss={()=>modalT(undefined as any, '', '', undefined as any, '', undefined as any, undefined as any, undefined as any)}
         stackBehavior='push'
       >
-        <View style={{ paddingHorizontal: 16, flexDirection:"column" }}>
+        <BottomSheetView style={{ paddingHorizontal: 16, flexDirection:"column" }}>
           <View style={styles.infoRow}>
             <Image
               source={{ uri: actualS2.img }}
@@ -1372,6 +1378,9 @@ const activateA = async () => {
           </View>
 
           <Option icon="add-circle-outline" label="Agregar a una playlist" onPress={() => toggleOverlayP()} />
+          {!publica && qp !== "Descargas" ? (
+            <Option icon="close-circle-outline" label="Eliminar de esta playlist" onPress={() => deleteCFP()} />
+          ) : null}
           <Option icon="cloud-download-outline" label="Descargar" onPress={() => {descargarYGuardarArchivoLocalmente()}} />
           <Option icon="person" label="Ir al artista" onPress={() => {
             router.push({
@@ -1388,7 +1397,7 @@ const activateA = async () => {
               <Text style={styles.optionText}>Abrir en la web</Text>
             </View>
           </ExternalLink>
-        </View>
+        </BottomSheetView>
       </BottomSheetModal>
 
       <Modal
@@ -1523,7 +1532,35 @@ const styles = StyleSheet.create({
     flexDirection:"row",
     alignItems:"center",
     marginTop:15,
-    marginBottom:-10
+    marginBottom:-10,
+    paddingBottom:10,
+    borderBottomWidth:0,
+    borderBottomColor:'#252525'
+  },
+  songCount: {
+    color: '#777',
+    fontSize: 13,
+    marginLeft: 8,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    marginRight: 10,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  emptyTitle: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginTop: 100,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    color: 'gray',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginTop: 6,
+    textAlign: 'center',
   },
   box: {
     backgroundColor: '#111111',

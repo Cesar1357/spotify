@@ -5,18 +5,17 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { usePathname } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Alert,
-    Animated as AnimatedR,
-    AppState,
-    BackHandler,
-    Dimensions,
-    InteractionManager,
-    Linking,
-    StyleSheet,
-    Text,
-    ToastAndroid,
-    TouchableOpacity,
-    View
+  Alert,
+  Animated as AnimatedR,
+  AppState,
+  BackHandler,
+  Dimensions,
+  Linking,
+  StyleSheet,
+  Text,
+  ToastAndroid,
+  TouchableOpacity,
+  View
 } from 'react-native';
 
 import { useAds } from "@/hooks/useAds";
@@ -175,12 +174,12 @@ export default function Repro() {
   const [queueTracks, setQueueTracks] = useState<AnyObject[]>([]);
   const currentIndexRef2 = useRef(-1); // Guarda el índice anterior
 
-  const snapPoints = useMemo(() => ['25%', '45%'], []);
+  const snapPoints = useMemo(() => ['43%', '43%'], []);
   const snapPoints2 = useMemo(() => ['100%', '100%'], []);
   const snapPoints3 = useMemo(() => ['43%', '43%'], []);
   const [conexionLenta, setConexionLenta] = useState(0);
 
-  const Option = ({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) => (
+  const Option: React.FC<{ icon: string; label: string; onPress: () => void }> = ({ icon, label, onPress }) => (
     <TouchableOpacity style={styles.option} onPress={onPress}>
       <Icon type="ionicon" name={icon} color="gray" size={30} />
       <Text style={styles.optionText}>{label}</Text>
@@ -866,17 +865,25 @@ const openLink = (nameA: string, autor: string) => {
     
   };
 
+  const closeOptionsModal = () => {
+    setModalVisible(false);
+    modalRef.current?.close();
+  };
+
+  const openPlaylistPicker = () => {
+    closeOptionsModal();
+    setTimeout(() => {
+      setVisibleP(true);
+      modalRefP.current?.present();
+    }, 300);
+  };
+
   const modalT = () => {
     if(modalVisible === true){
-      setModalVisible(false)
-      InteractionManager.runAfterInteractions(() => {
-        modalRef.current?.close();
-      });
+      closeOptionsModal();
     }else{
       setModalVisible(true)
-      InteractionManager.runAfterInteractions(() => {
-        modalRef.current?.present();
-      });
+      modalRef.current?.present();
     }
   }
 
@@ -957,15 +964,15 @@ const openLink = (nameA: string, autor: string) => {
           (cancion) => cancion.name === musica[0]
         );
 
+
         if (cancionExistente) {
           // La canción ya está descargada
           Alert.alert("Esta canción ya esta descargada","¿Quieres eliminarla?", [
           {
             text: 'Si',
             onPress: () => deletC(),
-          },{
+          }, {
             text: 'No',
-            onPress: () => console.log('Cancel Pressed'),
             style: 'cancel',
           }],{cancelable: true})
           setDescargando(false);
@@ -1742,10 +1749,10 @@ const getLikesPlaylist = async (playlist: string) => {
         backdropComponent={BottomSheetBackdrop}
         backgroundStyle={{ backgroundColor: '#111' }}
         handleIndicatorStyle={{ backgroundColor: 'gray' }}
-        onDismiss={modalT}
-        stackBehavior='replace'
+        onDismiss={() => setModalVisible(false)}
+        stackBehavior='push'
       >
-        <View style={{ paddingHorizontal: 16, flexDirection:"column" }}>
+        <BottomSheetView style={{ paddingHorizontal: 16, flexDirection:"column" }}>
           <View style={styles.infoRow}>
             <Image
               source={AdT ? require('../../assets/images/icon.png') : { uri: musica[2] }}
@@ -1757,9 +1764,10 @@ const getLikesPlaylist = async (playlist: string) => {
             </View>
           </View>
 
-          <Option icon="add-circle-outline" label="Agregar a una playlist" onPress={() => toggleOverlayP()} />
-          <Option icon="cloud-download-outline" label="Descargar" onPress={() => {descargarYGuardarArchivoLocalmente()}} />
+          <Option icon="add-circle-outline" label="Agregar a una playlist" onPress={() => openPlaylistPicker()} />
+          <Option icon="cloud-download-outline" label="Descargar" onPress={async () => { closeOptionsModal(); await descargarYGuardarArchivoLocalmente(); }} />
           <Option icon="person" label="Ir al artista" onPress={() => {
+            closeOptionsModal();
             router.push({
               pathname: "/(screens)/Autor",
               params: {
@@ -1771,12 +1779,12 @@ const getLikesPlaylist = async (playlist: string) => {
             modalRefP.current?.close();
           }} />
           <ExternalLink style={{}} href={`https://www.google.com/search?q=${musica[0]+" "+musica[1]}`}>
-            <View style={styles.option}>
+            <View onTouchEnd={closeOptionsModal} style={styles.option}>
               <Icon type={'ionicon'} name={"globe-outline"} color={"gray"} size={34} />
               <Text style={styles.optionText}>Abrir en la web</Text>
             </View>
           </ExternalLink>
-        </View>
+        </BottomSheetView>
       </BottomSheetModal>        
     </Animated.View>
   );

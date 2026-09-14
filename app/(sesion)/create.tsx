@@ -2,13 +2,13 @@ import { router } from 'expo-router';
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { useState } from 'react';
 import {
-  Alert,
-  KeyboardAvoidingView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    Alert,
+    KeyboardAvoidingView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { Icon } from 'react-native-elements';
 import { RFValue } from 'react-native-responsive-fontsize';
@@ -25,7 +25,7 @@ export default function CreateIn() {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [errorPassword, setErrorPassword] = useState("");
 
-  const checkPassword = (value) => {
+  const checkPassword = (value: string) => {
   // Mínimo 6 caracteres
   if (value.length < 6) {
     setErrorPassword("La contraseña debe de tener mínimo 6 carácteres")

@@ -6,13 +6,13 @@ import { getAuth, signOut, updateProfile } from "firebase/auth";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
-  BackHandler,
-  Text,
-  TextInput,
-  ToastAndroid,
-  TouchableOpacity,
-  View
+    Alert,
+    BackHandler,
+    Text,
+    TextInput,
+    ToastAndroid,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { Icon } from 'react-native-elements';
 import { RadioButton, Switch } from 'react-native-paper';
@@ -24,7 +24,7 @@ import { db } from '../../config/firebase';
 export default function Settings() {
 
   const [visible, setVisible] = useState(false);
-  const [checked, setChecked] = useState(null);
+  const [checked, setChecked] = useState<string>('false');
   const [isRegistered, setIsRegistered] = useState(false);
   const [toggleP, setToggleP] = useState(false);
   const [toggleS, setToggleS] = useState(false);
@@ -32,7 +32,7 @@ export default function Settings() {
   const [togglePerfilE, setTogglePerfilE] = useState(false);
 
   const [subtitles, setSubtitles] = useState(false);
-  const { uid, loading, displayname, correo, metadata, user } = useAuth();
+  const { uid, loading, displayname, correo, metadata, user } = useAuth() as any;
 
   const modalRef = useRef<BottomSheetModal>(null);
   const modalRef2 = useRef<BottomSheetModal>(null);
@@ -90,10 +90,10 @@ export default function Settings() {
     try{
       const docRef = doc(db, "people", uid);
       const docSnap = await getDoc(docRef);
-      const info = docSnap.data()
-      setIsRegistered(info.premium)
-      setSubtitles(info.extra.subtitulos)
-      setChecked(info.colorA)
+      const info = docSnap.data() as any;
+      setIsRegistered(Boolean(info?.premium));
+      setSubtitles(Boolean(info?.extra?.subtitulos));
+      setChecked(String(info?.colorA ?? 'false'));
     }catch(err){
       console.log(err)
     }
@@ -163,6 +163,7 @@ export default function Settings() {
   };
 
   const updateProfile1 =async () => {
+    if (!user || !uid) return;
     updateProfile(user, {
       displayName: n
     }).then(async(a) => {
@@ -485,7 +486,7 @@ export default function Settings() {
                 marginTop:RFValue(150),
                 textAlign:"center"
               }}>
-          Cuenta creada el: {metadata?.createdAt? createdAt : "Fecha no disponible"}
+          Cuenta creada el: {metadata?.createdAt ? createdAt : "Fecha no disponible"}
           </Text>
         </View>
 
@@ -494,7 +495,6 @@ export default function Settings() {
           onPress={() => Alert.alert("Cerrar sesión","¿Seguro que quieres cerrar sesión?", [
             {
               text: 'Si',
-              color: 'red',
               onPress: () => handleLogout(),
             },{
               text: 'No',

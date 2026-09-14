@@ -32,10 +32,11 @@ export default function Forgot() {
         router.back();
         // El correo electrónico ha sido enviado con éxito
         console.log('Correo electrónico de restablecimiento de contraseña enviado con éxito. Verifica tu bandeja de entrada.');
-      } catch (error) {
+      } catch (error: unknown) {
         // Manejar errores en caso de que el envío del correo electrónico falle
-        Alert.alert(error.message)
-        console.error('Error al enviar el correo electrónico de restablecimiento de contraseña:', error.message);
+        const message = error instanceof Error ? error.message : 'No se pudo enviar el correo';
+        Alert.alert(message)
+        console.error('Error al enviar el correo electrónico de restablecimiento de contraseña:', message);
       }
     }
     

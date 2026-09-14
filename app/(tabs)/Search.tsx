@@ -7,18 +7,18 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Alert,
-    AppState,
-    Dimensions,
-    FlatList,
-    Linking,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    ToastAndroid,
-    TouchableOpacity,
-    View
+  Alert,
+  AppState,
+  Dimensions,
+  FlatList,
+  Linking,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  ToastAndroid,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { Icon } from 'react-native-elements';
 import { Searchbar } from 'react-native-paper';
@@ -78,6 +78,8 @@ export default function Search() {
   const appState = useRef(AppState.currentState);
   const [appStateVisible, setAppStateVisible] = useState(appState.current);
   const [text,setText] = useState("")
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [visibleGenreCount, setVisibleGenreCount] = useState(20);
   var dimen = Dimensions.get("window")
 
   const [user, setUser] = useState<any>(null);
@@ -88,6 +90,38 @@ export default function Search() {
   const { uid, loading } = useAuth();
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [isReady, setIsReady] = useState(false);
+
+  const genreCards = useMemo(() => {
+    const counts = new Map<string, number>();
+    songs.forEach((song) => {
+      const genres = Array.isArray(song.generos)
+        ? song.generos
+        : typeof song.generos === 'string'
+          ? song.generos.split(',')
+          : [];
+      genres.forEach((genre: unknown) => {
+        const value = String(genre).trim();
+        if (value) counts.set(value, (counts.get(value) ?? 0) + 1);
+      });
+    });
+    return [...counts.entries()]
+      .sort(([, countA], [, countB]) => countB - countA)
+      .slice(0, 250)
+      .map(([name]) => name);
+  }, [songs]);
+
+  useEffect(() => {
+    setVisibleGenreCount(20);
+  }, [genreCards]);
+
+  const handleGenreScroll = (event: any) => {
+    if (searchFocused || text.trim().length > 0 || visibleGenreCount >= genreCards.length) return;
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
+    if (distanceFromBottom < 600) {
+      setVisibleGenreCount((count) => Math.min(count + 20, genreCards.length));
+    }
+  };
   
       useEffect(() => {
       const fetchCurrentTrack = async () => {
@@ -479,6 +513,18 @@ async function descargarYGuardarArchivoLocalmente() {
    
   };
 
+  const selectGenre = (genre: string) => {
+    const genreSongs = songs
+      .filter((song) => {
+        const genres = Array.isArray(song.generos) ? song.generos : [song.generos];
+        return genres.some((value: unknown) => String(value).trim().toLowerCase() === genre.toLowerCase());
+      })
+      .map((song) => ({ ...song, tipo: song.tipo ?? 'Canción' }));
+    setSearchFocused(true);
+    setText(genre);
+    setAllTransactions(genreSongs);
+  };
+
 
 
   const toggleOverlayP = () => {
@@ -554,7 +600,7 @@ async function descargarYGuardarArchivoLocalmente() {
                 await TrackPlayer.play();    
             }
             updateNumber2(name);
-            updateH(name,autor,uri,img,generos,letra,dominant)
+            updateH(name,formatAuthors(autor),uri,img,generos,letra,dominant)
           } catch (error) {
             console.error('Error al verificar el archivo:', error);
             ToastAndroid.showWithGravity(
@@ -644,7 +690,7 @@ async function descargarYGuardarArchivoLocalmente() {
 
     if(item.tipo === "Canción"){
     return (
-      <TouchableOpacity style={{padding:4}} onPress={() => change(item.uri, item.name, item.autores ?? item.autor,item.img,item.generos,item.letra,item.dominantColor)}>
+      <TouchableOpacity activeOpacity={0.7} style={{padding:4}} onPress={() => change(item.uri, item.name, item.autores ?? item.autor,item.img,item.generos,item.letra,item.dominantColor)}>
         <View style={styles.box}>
           <Image
             source={{ uri: `${item.img}` }}
@@ -688,7 +734,7 @@ async function descargarYGuardarArchivoLocalmente() {
     }
     if(item.tipo === "Historial"){
     return (
-      <TouchableOpacity style={{padding:4}} onPress={() => change(item.uri, item.name, item.autores ?? item.autor, item.img,item.generos,item.letra,item.dominantColor)}>
+      <TouchableOpacity activeOpacity={0.7} style={{padding:4}} onPress={() => change(item.uri, item.name, item.autores ?? item.autor, item.img,item.generos,item.letra,item.dominantColor)}>
         <View style={styles.box}>      
           <Image
             source={{ uri: `${item.img}` }}
@@ -1096,7 +1142,7 @@ const getLikesPlaylist = async (playlist: string) => {
 
   return (
     <SafeAreaView style={styles.container}>
-    <ScrollView style={{flex:1,backgroundColor:"#111111"}} stickyHeaderIndices={[1]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps={'always'} persistentScrollbar={true}>
+    <ScrollView style={{flex:1,backgroundColor:"#111111"}} onScroll={handleGenreScroll} scrollEventThrottle={250} stickyHeaderIndices={[1]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps={'always'} persistentScrollbar={true}>
       <View style={styles.upperContainer}>
         <Text
           style={{
@@ -1114,12 +1160,59 @@ const getLikesPlaylist = async (playlist: string) => {
           placeholder="¿Qué quieres escuchar?"
           onChangeText={getSongs}
           value={text}
+          onFocus={() => setSearchFocused(true)}
+          onBlur={() => {
+            if (text.trim().length === 0) setSearchFocused(false);
+          }}
+          onClearIconPress={() => {
+            setText('');
+            setSearchFocused(false);
+            getHistorial();
+          }}
           
           style={{width:"95%",alignSelf:"center", paddingTop:10}}
       />
+      {!searchFocused && text.trim().length === 0 ? (
+        <View style={{ marginTop: 24 }}>
+          <Text style={{ color: 'white', fontSize: 22, fontWeight: '800', marginLeft: 14, marginBottom: 12 }}>
+            Explora por género
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 9}}>
+            {genreCards.slice(0, visibleGenreCount).map((item) => (
+              <TouchableOpacity
+                key={item}
+                activeOpacity={0.75}
+                onPress={() => selectGenre(item)}
+                style={{
+                  width: '47%',
+                  height: 82,
+                  marginHorizontal: '1.5%',
+                  marginBottom: 10,
+                  padding: 12,
+                  borderRadius: 12,
+                  backgroundColor: '#252525',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <Icon type="material" name="music-note" color="#1DB954" size={24} />
+                <Text numberOfLines={1} style={{ color: 'white', fontSize: 15, fontWeight: '700' }}>
+                  {item}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <View style={{height:200}}> 
+          </View>
+        </View>
+      ) : null}
+      {searchFocused && text.trim().length > 0 ? (
+        <Text style={{ color: '#888', fontSize: 13, marginLeft: 14, marginTop: 8 }}>
+          {allTransactions.length} resultados
+        </Text>
+      ) : null}
       
 
-      <FlatList
+      {searchFocused ? <FlatList
         style={{ marginTop: 20}} 
         data={allTransactions}
         renderItem={renderItem}
@@ -1151,7 +1244,7 @@ const getLikesPlaylist = async (playlist: string) => {
             </Text>
           </View>
         }
-      />
+      /> : null}
       <BottomSheetModal
       ref={modalRefP}
       index={1}

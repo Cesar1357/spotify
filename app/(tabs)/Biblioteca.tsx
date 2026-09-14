@@ -2,8 +2,10 @@ import NetInfo from '@react-native-community/netinfo';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  BackHandler,
   FlatList,
   Image,
+  Keyboard,
   StyleSheet,
   Text,
   ToastAndroid,
@@ -32,7 +34,8 @@ export default function Biblioteca() {
 
     const modalRef = useRef<BottomSheetModal>(null);
     const modalRef2 = useRef<BottomSheetModal>(null);
-    const snapPoints = useMemo(() => ['38%', '52%'], []);
+    const createPlaylistInputRef = useRef<any>(null);
+    const snapPoints = useMemo(() => ['45%', '85%'], []);
     const snapPoints2 = useMemo(() => ['55%', '55%'], []);
 
 
@@ -57,6 +60,47 @@ export default function Biblioteca() {
     };
   }, [uid]);
 
+  useEffect(() => {
+    const keyboardDidShow = Keyboard.addListener('keyboardDidShow', () => {
+      if (visible) modalRef.current?.snapToIndex(1);
+    });
+    const keyboardDidHide = Keyboard.addListener('keyboardDidHide', () => {
+      if (visible) modalRef.current?.snapToIndex(0);
+    });
+
+    return () => {
+      keyboardDidShow.remove();
+      keyboardDidHide.remove();
+    };
+  }, [visible]);
+
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (visible2) {
+        setVisible2(false);
+        modalRef2.current?.dismiss();
+        return true;
+      }
+      if (visible) {
+        setVisible(false);
+        Keyboard.dismiss();
+        modalRef.current?.dismiss();
+        return true;
+      }
+      return false;
+    });
+
+    return () => backHandler.remove();
+  }, [visible, visible2]);
+
+  const closeLibraryModals = () => {
+    setVisible(false);
+    setVisible2(false);
+    Keyboard.dismiss();
+    modalRef.current?.dismiss();
+    modalRef2.current?.dismiss();
+  };
+
 const getUser = async() => {
     if (!uid) return;
     const docRef = doc(db, "people", uid);
@@ -77,12 +121,13 @@ const getUser = async() => {
     const renderItem = ({ item }: { item: any }) => {
         if(item.name === "Descargas"){
         return(
-            <TouchableOpacity style={styles.container2} onPress={() => router.push({
-              pathname: "/(screens)/Playlist",
-              params: {
-                qplaylist: "Descargas",
-              }
-            })}>
+            <TouchableOpacity style={styles.container2} onPress={() => {
+              router.push({
+                pathname: "/(screens)/Playlist",
+                params: { qplaylist: "Descargas" },
+              });
+              closeLibraryModals();
+            }}>
             <View style={styles.box}>
                 <View style={{flexDirection:"row",justifyContent:"center",alignItems:"center"}}>
                   <View style={{paddingLeft:5,paddingRight:7}}>
@@ -97,12 +142,13 @@ const getUser = async() => {
         );
         }else{
         return(
-            <TouchableOpacity style={styles.container2} onPress={() => router.push({
-              pathname: "/(screens)/Playlist",
-              params: {
-                qplaylist: item.name,
-              }
-            })}>
+            <TouchableOpacity style={styles.container2} onPress={() => {
+              router.push({
+                pathname: "/(screens)/Playlist",
+                params: { qplaylist: item.name },
+              });
+              closeLibraryModals();
+            }}>
             <View style={styles.box}>
                 <View style={{flexDirection:"row",justifyContent:"center",alignItems:"center",paddingLeft:10}}>
                 <View style={styles.circularImageContainer}>
@@ -125,16 +171,23 @@ const getUser = async() => {
     }
 
 const toggleOverlay = async (v = false) => {
+    const openCreatePlaylist = () => {
+      setVisible(true);
+      modalRef.current?.present();
+      setTimeout(() => {
+        modalRef.current?.snapToIndex(1);
+        createPlaylistInputRef.current?.focus();
+      }, 250);
+    };
+
     if(visible === false && !v){
       if(user?.premium === true){
-        setVisible(true);
-        modalRef.current?.present()
+        openCreatePlaylist();
       }else{
         if(lists.length === 3){
           Alert.alert("Ya superaste el máximo de playlists gratuitas")
         }else{
-          setVisible(true);
-          modalRef.current?.present()
+          openCreatePlaylist();
         }
       }
 
@@ -394,6 +447,7 @@ const toglePublish = async(name: string) => {
             <Text style={styles.sheetTitle}>Crear nueva playlist</Text>
             <Text style={styles.sheetHint}>Organiza tus canciones como quieras.</Text>
             <BottomSheetTextInput
+              ref={createPlaylistInputRef}
               style={{
                 backgroundColor: 'white',
                 fontWeight: 'bold',

@@ -1,7 +1,7 @@
 import TrackPlayer, { Event } from "react-native-track-player";
 import { playAd } from "./adsService";
 
-module.exports = async function() {
+export default async function trackPlayerService() {
   TrackPlayer.addEventListener(Event.RemotePlay, () => TrackPlayer.play());
   TrackPlayer.addEventListener(Event.RemotePause, () => TrackPlayer.pause());
 
@@ -13,4 +13,4 @@ module.exports = async function() {
     TrackPlayer.skipToPrevious()
   );
 
-};
+}
