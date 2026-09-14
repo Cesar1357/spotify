@@ -63,7 +63,7 @@ export default function Repro() {
     setProgress(xd)
   },[position,duration])
   
-  const updateNumber2 = (name,uri,autor,img,generos,letra,dominant,qplaylist) => {
+  const updateNumber2 = (name,uri,autor,img,generos,letra,dominant,qplaylist,autores) => {
       console.log("funcion de updateNumber2");
       try{
         const now = dayjs();
@@ -91,6 +91,7 @@ export default function Repro() {
             dateS:date,
             name:name,
             autor:autor,
+            autores:autores ?? (autor ? [autor] : []),
             uri:uri,
             img:img,
             generos:generos,
@@ -181,7 +182,7 @@ export default function Repro() {
           console.log('Track cambiado e indiceRepro:', e.nextTrack,e.track,"|", track.title);
           if(!track.isAd && lastUpdatedRef.current !== track.title){
             lastUpdatedRef.current = track.title;
-            updateNumber2(track.title,track.url,track.artist,track.artwork,track.generos,track.letra,track.dominantColor,track.qplaylist);
+            updateNumber2(track.title,track.url,track.artist,track.artwork,track.generos,track.letra,track.dominantColor,track.qplaylist,track.autores);
           }
           
         }

@@ -19,7 +19,8 @@ export async function loadAds() {
         url: item.uri,
         vid: item.uri, // si tienes un campo diferente para video cámbialo
         title: item.name,
-        artist: item.autor,
+        artist: Array.isArray(item.autores) ? item.autores.join(', ') : String(item.autores ?? item.autor ?? ''),
+        autores: Array.isArray(item.autores) ? item.autores : item.autor ? (Array.isArray(item.autor) ? item.autor : [item.autor]) : [],
         artwork:
           "https://firebasestorage.googleapis.com/v0/b/spotify-20a57.appspot.com/o/anuncios%2FChatGPT%20Image%2027%20ago%202025%2C%2009_16_23%20p.m..png?alt=media&token=cc4597cd-c5b3-42a1-a2c8-79466ea306c2",
         dominantColor: "#404040",
@@ -65,6 +66,7 @@ export async function playAdBase({ setMusica, setCurrentTrack, setAdT, user, set
       vid: selectedAd.vid,
       title: selectedAd.title,
       artist: selectedAd.artist,
+      autores: selectedAd.autores,
       artwork: selectedAd.artwork,
       dominantColor: selectedAd.dominantColor,
       qplaylist: "Anuncios",
@@ -149,6 +151,7 @@ export async function playAd() {
           dateS:date,
           name:track.title,
           autor:track.artist,
+          autores: track.autores ?? (track.artist ? [track.artist] : []),
           uri:track.url,
           img:track.artwork,
           generos:track.generos,
@@ -182,6 +185,7 @@ export async function playAd() {
       vid: selectedAd.vid,
       title: selectedAd.title,
       artist: selectedAd.artist,
+      autores: selectedAd.autores,
       artwork: selectedAd.artwork,
       dominantColor: selectedAd.dominantColor,
       qplaylist: "Anuncios",

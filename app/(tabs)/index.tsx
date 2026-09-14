@@ -27,14 +27,20 @@ import { useHomeFeed } from '@/hooks/useHomeFeed';
 import TrackPlayer from 'react-native-track-player';
 
 import { useApp } from '../../context/AppContext';
+import { formatAuthors, normalizeAuthors, type AuthorValue } from '../../utils/authors';
 
 export default function HomeScreen() {
   const [allTransactionsP, setAllTransactionsP] = useState<any[]>([]);
   const [allTransactionsN, setAllTransactionsN] = useState<any[]>([]);
   const [allTransactionsL, setAllTransactionsL] = useState<any[]>([]); 
-  const [allTransactionsPop, setAllTransactionsPop] = useState<any[]>([]);
   const [allTransactionsAmbient, setAllTransactionsAmbient] = useState<any[]>([]);
   const [allTransactionsDreamcore, setAllTransactionsDreamcore] = useState<any[]>([]);
+  const [allTransactionsMood, setAllTransactionsMood] = useState<any[]>([]);
+  const [moodTitle, setMoodTitle] = useState('Recomendado para ti');
+  const [dynamicGenreSections, setDynamicGenreSections] = useState<any[]>([]);
+  const [visibleDynamicGenreCount, setVisibleDynamicGenreCount] = useState(4);
+  const [featuredArtistSongs, setFeaturedArtistSongs] = useState<any[]>([]);
+  const [featuredArtistName, setFeaturedArtistName] = useState('');
 
   const [allTransactionsPlaylistsO, setAllTransactionsPlaylistsO] = useState<any[]>([]); 
   const [allTransactionsArtistas, setAllTransactionsArtistas] = useState<any[]>([])
@@ -49,14 +55,11 @@ export default function HomeScreen() {
   const { icon, setIcon, musica, setMusica, colorA, setColorA, setUid, currentTrack, setCurrentTrack, lastRouteRef, user, setUser } = useApp();
   const [dondeP, setDondeP] = useState<any | null>(null);
   const [dondeN, setDondeN] = useState<any | null>(null);
-  const [dondePop, setDondePop] = useState<any | null>(null);
   const [dondeAmbient, setDondeAmbient] = useState<any | null>(null);
   const [dondeDreamcore, setDondeDreamcore] = useState<any | null>(null);
   
   const [state, setState] = useState("si")
-  var dimen = Dimensions.get("window")
-
-  const [orden, setOrden] = useState(Math.floor(Math.random() * 3))
+  const dimen = Dimensions.get("window")
 
   const [isReady, setIsReady] = useState(false);
   const { uid, loading } = useAuth();
@@ -69,9 +72,13 @@ export default function HomeScreen() {
       setAllTransactionsP,
       setAllTransactionsN,
       setAllTransactionsL,
-      setAllTransactionsPop,
       setAllTransactionsAmbient,
       setAllTransactionsDreamcore,
+      setAllTransactionsMood,
+      setMoodTitle,
+      setDynamicGenreSections,
+      setFeaturedArtistSongs,
+      setFeaturedArtistName,
       setAllTransactionsPlaylistsO,
       setPlaylists3,
       setLastS3,
@@ -79,7 +86,6 @@ export default function HomeScreen() {
       setAllTransactionsArtistas2,
       setDondeP,
       setDondeN,
-      setDondePop,
       setDondeAmbient,
       setDondeDreamcore,
     }),
@@ -89,9 +95,13 @@ export default function HomeScreen() {
       setAllTransactionsP,
       setAllTransactionsN,
       setAllTransactionsL,
-      setAllTransactionsPop,
       setAllTransactionsAmbient,
       setAllTransactionsDreamcore,
+      setAllTransactionsMood,
+      setMoodTitle,
+      setDynamicGenreSections,
+      setFeaturedArtistSongs,
+      setFeaturedArtistName,
       setAllTransactionsPlaylistsO,
       setPlaylists3,
       setLastS3,
@@ -99,13 +109,16 @@ export default function HomeScreen() {
       setAllTransactionsArtistas2,
       setDondeP,
       setDondeN,
-      setDondePop,
       setDondeAmbient,
       setDondeDreamcore,
     ],
   );
 
   const homeFeed = useHomeFeed(uid, homeFeedSetters);
+
+  useEffect(() => {
+    setVisibleDynamicGenreCount(4);
+  }, [dynamicGenreSections]);
 
   const {
     fetchUser,
@@ -159,20 +172,23 @@ export default function HomeScreen() {
 
 
 
-  const change = async (uri: any, name: string, autor: string, img: string, generos: any, letra: any, dominant: any) => {  
+  const change = async (uri: any, name: string, autor: AuthorValue, img: string, generos: any, letra: any, dominant: any) => {  
     if(musica[2] !== "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTkM03yBVebiMnBH5Kn2h3XazhS4sAIxn3w6w&s"){
         try {
           // Verificamos si el archivo existe
           const nombreArchivo = name+".mp3"
           const rutaLocal = `${FileSystem.documentDirectory}${nombreArchivo}`;
           const fileInfo = await FileSystem.getInfoAsync(rutaLocal);
+          const authorText = formatAuthors(autor);
+          const authors = normalizeAuthors(autor);
           if (fileInfo.exists) {
             console.log("ex")
-            setMusica([name,autor,img,uri,generos,letra,"Inicio",dominant])
+            setMusica([name,authorText,img,uri,generos,letra,"Inicio",dominant])
             await TrackPlayer.load({
                 url: rutaLocal, // Load media from the network
                 title: name,
-                artist: autor,
+                artist: authorText,
+                autores: authors,
                 artwork: img, // Load artwork from the network
                 uri: uri,
                 generos: generos,
@@ -186,12 +202,13 @@ export default function HomeScreen() {
           } else {
             console.log("noex")
             try {
-              setMusica([name,autor,img,uri,generos,letra,"Inicio",dominant])
+              setMusica([name,authorText,img,uri,generos,letra,"Inicio",dominant])
               await TrackPlayer.load({
                 url: Array.isArray(uri)?uri[0]:uri, // Load media from the network
                 vid: Array.isArray(uri)?uri[1]:null,
                 title: name,
-                artist: autor,
+                artist: authorText,
+                autores: authors,
                 artwork: img, // Load artwork from the network
                 uri: uri,
                 generos: generos,
@@ -217,9 +234,14 @@ export default function HomeScreen() {
       }
     };
 
+  const changeRef = useRef(change);
+  changeRef.current = change;
+  const updatePlaRef = useRef(updatePla);
+  updatePlaRef.current = updatePla;
+
   
   /* Memoized item components to reduce re-renders and improve performance */
-  const PlaylistCard = React.memo(({ item }: { item: any }) => {
+  const PlaylistCard = useMemo(() => React.memo(function PlaylistCardItem({ item }: { item: any }) {
     const artwork = item.uri || item.img || 'https://images.squarespace-cdn.com/content/v1/587d4a02bebafb893ba07d90/1484886557050-V261JTTHHGX0O3KHW5OX/ui-ux-playlist-gen-icon.png';
     return (
       <TouchableOpacity style={{flexDirection:"row",borderRadius:10,backgroundColor:"#252525",width:dimen.width/3.2,height:45,marginLeft:5,alignItems:"center"}} onPress={() => router.push({ pathname: "./../(screens)/Playlist", params: { qplaylist: item.name } })}>
@@ -227,31 +249,35 @@ export default function HomeScreen() {
         <Text numberOfLines={1} style={{ fontSize: 18, color: "white", fontWeight: 'bold', marginLeft:3, maxWidth:"50%" }}>{item.name}</Text>
       </TouchableOpacity>
     );
-  });
+  }), [dimen.width]);
+  PlaylistCard.displayName = 'PlaylistCard';
 
-  const SongCard = React.memo(({ item }: { item: any }) => {
-    const color = currentTrack?.title === item.name ? 'green' : 'white';
+  const SongCard = useMemo(() => React.memo(function SongCardItem({ item, activeTitle }: { item: any; activeTitle?: string }) {
+    const color = activeTitle === item.name ? 'green' : 'white';
+    const authors = item.autores ?? item.autor;
     const artwork = item.img || item.artwork || item.cover || item.uri || 'https://images.squarespace-cdn.com/content/v1/587d4a02bebafb893ba07d90/1484886557050-V261JTTHHGX0O3KHW5OX/ui-ux-playlist-gen-icon.png';
     return (
-      <TouchableOpacity style={{padding:5}} onPress={() => change(item.uri, item.name, item.autor, item.img, item.generos, item.letra, item.dominantColor)}>
+      <TouchableOpacity style={{padding:5}} onPress={() => changeRef.current(item.uri, item.name, authors, item.img, item.generos, item.letra, item.dominantColor)}>
         <View style={styles.box}>
           <Image source={{ uri: artwork }} cachePolicy='memory-disk' contentFit='cover' style={{ width: RFValue(120), height: RFValue(120), borderRadius: 0, marginLeft: 5 }} />
           <View style={{ marginLeft: 5, width:RFValue(120)}}>
             <Text style={{ fontSize: 15, color, fontWeight: 'bold', marginTop: 9 }} adjustsFontSizeToFit={false} numberOfLines={1}>{item.name}</Text>
             <View style={{flexDirection:"column"}}>
-              <Text style={{ fontSize: 13, color: '#969696', marginTop: 2, marginLeft: 2 }} adjustsFontSizeToFit={false} numberOfLines={2}>{item.tipo} · {item.autor}</Text>
+              <Text style={{ fontSize: 13, color: '#969696', marginTop: 2, marginLeft: 2 }} adjustsFontSizeToFit={false} numberOfLines={2}>{item.tipo} · {formatAuthors(authors)}</Text>
             </View>
           </View>
         </View>
       </TouchableOpacity>
     );
-  });
+  }), []);
+  SongCard.displayName = 'SongCard';
 
-  const SongCardMain = React.memo(({ item }: { item: any }) => {
-    const color = currentTrack?.title === item.name ? 'green' : 'white';
+  const SongCardMain = useMemo(() => React.memo(function SongCardMainItem({ item, activeTitle }: { item: any; activeTitle?: string }) {
+    const color = activeTitle === item.name ? 'green' : 'white';
+    const authors = item.autores ?? item.autor;
     const artwork = item.img || item.artwork || item.cover || item.uri || 'https://images.squarespace-cdn.com/content/v1/587d4a02bebafb893ba07d90/1484886557050-V261JTTHHGX0O3KHW5OX/ui-ux-playlist-gen-icon.png';
     return(
-    <TouchableOpacity style={{flexDirection:"column",borderRadius:10,backgroundColor:"#252525",width:dimen.width/3.2,height:dimen.width/2.7,marginLeft:5,alignItems:"center"}} onPress={() => change(item.uri, item.name, item.autor,item.img,item.generos,item.letra,item.dominantColor)}> 
+    <TouchableOpacity style={{flexDirection:"column",borderRadius:10,backgroundColor:"#252525",width:dimen.width/3.2,height:dimen.width/2.7,marginLeft:5,alignItems:"center"}} onPress={() => changeRef.current(item.uri, item.name, authors,item.img,item.generos,item.letra,item.dominantColor)}> 
       <Image source={{ uri: artwork }} cachePolicy='memory-disk' contentFit='cover' style={{ width: "100%",
         height: dimen.width/3.4,
         borderTopLeftRadius:10,
@@ -271,12 +297,13 @@ export default function HomeScreen() {
       </Text>
     </TouchableOpacity>
     );
-  });
+  }), [dimen.width]);
+  SongCardMain.displayName = 'SongCardMain';
 
 
-  const PlaylistOCard = React.memo(({ item }: { item: any }) => {
+  const PlaylistOCard = useMemo(() => React.memo(function PlaylistOCardItem({ item }: { item: any }) {
     return (
-      <TouchableOpacity style={{flexDirection:"row",borderRadius:10,backgroundColor:"#252525",height:50,marginLeft:5,width:150,marginBottom:5}} onPress={() => updatePla(item.by,item.nameP)}>
+      <TouchableOpacity style={{flexDirection:"row",borderRadius:10,backgroundColor:"#252525",height:50,marginLeft:5,width:150,marginBottom:5}} onPress={() => updatePlaRef.current(item.by,item.nameP)}>
         <Image source={{ uri: "https://images.squarespace-cdn.com/content/v1/587d4a02bebafb893ba07d90/1484886557050-V261JTTHHGX0O3KHW5OX/ui-ux-playlist-gen-icon.png"  }} contentFit='cover' style={{ width: 40, height: 40, marginLeft:5, marginTop:5 }} />
         <View style={{flexDirection:"column",alignSelf:"flex-start",marginRight:10}}>
           <Text numberOfLines={1} style={{ fontSize: 18, color: "white", fontWeight: 'bold', marginLeft:5, marginTop:5, textAlign:"left" }}>{item.nameP}</Text>
@@ -284,23 +311,31 @@ export default function HomeScreen() {
         </View>
       </TouchableOpacity>
     );
-  });
+  }), []);
+  PlaylistOCard.displayName = 'PlaylistOCard';
 
-  const ArtistCard = React.memo(({ item }: { item: any }) => {
+  const ArtistCard = useMemo(() => React.memo(function ArtistCardItem({ item }: { item: any }) {
     return (
       <TouchableOpacity onPress={() => { router.push({ pathname: "/(screens)/Autor", params: { nameA: item.name } }); }} style={{flexDirection:"row",borderRadius:10,backgroundColor:"#252525",height:50,marginLeft:5,width:150,marginHorizontal:10,alignItems:"center"}}>
         <Image source={{ uri: item.uri }} contentFit='cover' style={{ width: 40, height: 40, borderRadius:10, justifyContent:"flex-start", margin:5 }} />
         <Text numberOfLines={1} style={{ fontSize: 16, color: "white", fontWeight: 'bold', marginLeft:5, textAlign:"center", width:90 }}>{item.name}</Text>
       </TouchableOpacity>
     );
-  });
+  }), []);
+  ArtistCard.displayName = 'ArtistCard';
 
   // Stable render callbacks
   const renderItemPlaylist = useCallback(({ item }: { item: any }) => <PlaylistCard item={item} />, [router]);
-  const renderItemLS = useCallback(({ item }: { item: any }) => <SongCardMain item={item} />, [currentTrack]);
+  const renderItemLS = useCallback(({ item }: { item: any }) => <SongCardMain item={item} activeTitle={currentTrack?.title} />, [SongCardMain, currentTrack?.title]);
   const renderItemPlayO = useCallback(({ item }: { item: any }) => <PlaylistOCard item={item} />, [updatePla]);
   const renderItemArtistas = useCallback(({ item }: { item: any }) => <ArtistCard item={item} />, [router]);
-  const renderItem = useCallback(({ item }: { item: any }) => <SongCard item={item} />, [currentTrack]);
+  const renderItem = useCallback(({ item }: { item: any }) => <SongCard item={item} activeTitle={currentTrack?.title} />, [SongCard, currentTrack?.title]);
+  const sectionSongNames = new Set<string>();
+  const getUniqueSectionSongs = (items: any[]) => items.filter((item) => {
+    if (!item?.name || sectionSongNames.has(item.name)) return false;
+    sectionSongNames.add(item.name);
+    return true;
+  });
 
 
  const Playlist3 = ()=> {
@@ -329,9 +364,10 @@ export default function HomeScreen() {
     if(lastS3.length >= 3){
     return(
       <View style={{}}>
+      <Text style={{color:"white", fontSize:25, fontWeight:"900", marginTop:20,marginLeft:10}}>Tu rotación reciente</Text>
       <FlatList
         style={{ marginTop: 8,marginLeft:3}} 
-        data={lastS3}
+        data={getUniqueSectionSongs(lastS3)}
         renderItem={renderItemLS}
         onEndReachedThreshold={0.5}
         showsVerticalScrollIndicator={false}
@@ -378,7 +414,7 @@ export default function HomeScreen() {
         <Text style={{color:"white", fontSize:25, fontWeight:"900", marginTop:20,marginLeft:10}}>Lo más nuevo</Text>
         <FlatList
           style={{ marginTop: 10}} 
-          data={allTransactionsN}
+          data={getUniqueSectionSongs(allTransactionsN)}
           renderItem={renderItem}
           onEndReached={() => fetchMoreTransactionsN(user, allTransactionsN, dondeN)}
           onEndReachedThreshold={0.5}
@@ -401,7 +437,7 @@ export default function HomeScreen() {
         <Text style={{color:"white", fontSize:25, fontWeight:"900", marginTop:20,marginLeft:10}}>De tus géneros</Text>
         <FlatList
           style={{ marginTop: 10}} 
-          data={allTransactionsL}
+          data={getUniqueSectionSongs(allTransactionsL)}
           renderItem={renderItem}
           onEndReachedThreshold={0.5}
           showsVerticalScrollIndicator={false}
@@ -420,6 +456,57 @@ export default function HomeScreen() {
       )
     }
   }
+
+  const MoodSection = () => {
+    if (allTransactionsMood.length === 0) return null;
+    return (
+      <View>
+        <Text style={{color:"white", fontSize:25, fontWeight:"900", marginTop:20,marginLeft:10}}>{moodTitle}</Text>
+        <FlatList
+          style={{ marginTop: 10 }}
+          data={getUniqueSectionSongs(allTransactionsMood)}
+          renderItem={renderItem}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyExtractor={(item, index) => `${item.name}-${index}`}
+        />
+      </View>
+    );
+  };
+
+  const ArtistaDestacado = () => {
+    if (!featuredArtistName || featuredArtistSongs.length === 0) return null;
+    return (
+      <View>
+        <Text style={{color:"white", fontSize:25, fontWeight:"900", marginTop:20,marginLeft:10}}>De {featuredArtistName}</Text>
+        <FlatList data={getUniqueSectionSongs(featuredArtistSongs)} renderItem={renderItem} horizontal style={{marginTop:10}} showsHorizontalScrollIndicator={false} keyExtractor={(item, index) => `${item.name}-${index}`} />
+      </View>
+    );
+  };
+
+  const DynamicGenres = () => (
+    <View>
+      {dynamicGenreSections.slice(0, visibleDynamicGenreCount).map((section) => {
+        const songs = section.songs.filter((song: any, index: number, list: any[]) =>
+          song.name && list.findIndex((item) => item.name === song.name) === index,
+        );
+        if (songs.length === 0) return null;
+        return (
+          <View key={section.genre}>
+            <Text style={{color:"white", fontSize:25, fontWeight:"900", marginTop:20,marginLeft:10}}>{section.title}</Text>
+            <FlatList
+              data={songs}
+              renderItem={renderItem}
+              horizontal
+              style={{marginTop:10}}
+              showsHorizontalScrollIndicator={false}
+              keyExtractor={(item, index) => `${item.name}-${index}`}
+            />
+          </View>
+        );
+      })}
+    </View>
+  );
 
 
 
@@ -479,29 +566,6 @@ export default function HomeScreen() {
   };
  
 
-  const Gpop = ()=> {
-    if(allTransactionsPop.length !== 0){
-      return(
-        <View>
-        <Text style={{color:"white", fontSize:25, fontWeight:"900", marginTop:20,marginLeft:10}}>Pop</Text>
-        <FlatList
-          style={{ marginTop: 10}} 
-          data={allTransactionsPop}
-          renderItem={renderItem}
-          onEndReached={() => fetchMoreGenreSection(user, allTransactionsPop, dondePop, 'pop', setAllTransactionsPop, setDondePop)}
-          onEndReachedThreshold={0.5}
-          showsVerticalScrollIndicator={false}
-          scrollsToTop={false}
-          indicatorStyle={'white'}
-          persistentScrollbar={true}
-          horizontal={true}
-          keyExtractor={(item, index) => index.toString()}
-        />
-        </View>
-      )
-    }
-  }
-
   const Gambient = ()=> {
     if(allTransactionsAmbient.length !== 0){
       return(
@@ -509,7 +573,7 @@ export default function HomeScreen() {
         <Text style={{color:"white", fontSize:25, fontWeight:"bold", marginTop:20,marginLeft:10}}>Relajante</Text>
         <FlatList
           style={{ marginTop: 10}} 
-          data={allTransactionsAmbient}
+          data={getUniqueSectionSongs(allTransactionsAmbient)}
           renderItem={renderItem}
           onEndReached={() => fetchMoreGenreSection(user, allTransactionsAmbient, dondeAmbient, 'ambient', setAllTransactionsAmbient, setDondeAmbient)}
           onEndReachedThreshold={0.5}
@@ -532,7 +596,7 @@ export default function HomeScreen() {
         <Text style={{color:"white", fontSize:25, fontWeight:"bold", marginTop:20,marginLeft:10}}>Dreamcore</Text>
         <FlatList
           style={{ marginTop: 10}} 
-          data={allTransactionsDreamcore}
+          data={getUniqueSectionSongs(allTransactionsDreamcore)}
           renderItem={renderItem}
           onEndReached={() => fetchMoreGenreSection(user, allTransactionsDreamcore, dondeDreamcore, 'dreamcore', setAllTransactionsDreamcore, setDondeDreamcore)}
           onEndReachedThreshold={0.5}
@@ -576,47 +640,47 @@ export default function HomeScreen() {
   }
 
   const juntos = () => {
-    
-    const componentsList = [Playlists, Gpop, Gambient, Artistas, Gdreamcore];
-    const shuffled = [...componentsList].sort(() => Math.random() - 0.5);
-    
-    if (orden === 0) {
-      return (
-        <>
-          {Playlists()}
-          {Gpop()}
-          {Gambient()}
-          {Artistas()}
-          {Gdreamcore()}
-        </>
-      );
-    } else if (orden === 1) {
-      return (
-        <>
-          {Gdreamcore()}
-          {Playlists()}
-          {Gpop()}
-          {Artistas()}
-          {Gambient()}
-          
-        </>
-      );
-    } else {
-      return (
-        <>
-          {Artistas()}
-          {Gpop()}
-          {Gambient()}
-          {Gdreamcore()}
-          {Playlists()}
-        </>
-      );
+    const predefinedSections = [
+      MoodSection,
+      LoQueTeGusta,
+      LoMasNuevo,
+      LoMasPopular,
+      Playlists,
+      Gambient,
+      Gdreamcore,
+      Artistas,
+      ArtistaDestacado,
+    ];
+    return (
+      <View>
+        {predefinedSections.map((Section, index) => (
+          <View key={`${Section.name}-${index}`}>
+            {Section()}
+          </View>
+        ))}
+      </View>
+    );
+  };
+
+  const handleHomeScroll = (event: any) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
+    if (distanceFromBottom < 700 && visibleDynamicGenreCount < dynamicGenreSections.length) {
+      setVisibleDynamicGenreCount((count) => Math.min(count + 3, dynamicGenreSections.length));
     }
   };
   
   return (
     <SafeAreaView style={styles.container}>  
-      <ScrollView style={{}} stickyHeaderIndices={[1]}>   
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: RFValue(140) }}
+        onScroll={handleHomeScroll}
+        scrollEventThrottle={250}
+        nestedScrollEnabled
+        showsVerticalScrollIndicator
+        removeClippedSubviews={false}
+      >
         <View style={{backgroundColor: '#111111',flexDirection:"row",alignItems:"center",alignContent:"center",marginTop:30,marginBottom:40,justifyContent:"space-between"}}> 
           <Text
               style={{
@@ -638,12 +702,10 @@ export default function HomeScreen() {
         </View>   
       </View>
         {Playlist3()}
-        {LSongs3()}  
-        {Main()} 
-        {LoMasPopular()}   
-        {LoMasNuevo()} 
-        {LoQueTeGusta()}
+        {LSongs3()}
+        {Main()}
         {juntos()}
+        {DynamicGenres()}
         <View>  
           <Text style={{height:RFValue(200)}}></Text>    
         </View>  

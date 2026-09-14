@@ -2,16 +2,16 @@ import { Image } from 'expo-image';
 import { useLocalSearchParams } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
-  AppState,
-  FlatList,
-  Linking,
-  ListRenderItem,
-  StyleSheet,
-  Text,
-  ToastAndroid,
-  TouchableOpacity,
-  View
+    Alert,
+    AppState,
+    FlatList,
+    Linking,
+    ListRenderItem,
+    StyleSheet,
+    Text,
+    ToastAndroid,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import TrackPlayer, { State } from 'react-native-track-player';
 
@@ -28,12 +28,12 @@ import { ExternalLink } from '@/components/ExternalLink';
 import { MotiView } from 'moti';
 
 import Animated, {
-  runOnJS,
-  useAnimatedReaction,
-  useAnimatedScrollHandler,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming
+    runOnJS,
+    useAnimatedReaction,
+    useAnimatedScrollHandler,
+    useAnimatedStyle,
+    useSharedValue,
+    withTiming
 } from 'react-native-reanimated';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -42,6 +42,7 @@ import { collection, doc, getDoc, getDocs, onSnapshot, orderBy, query, setDoc, T
 import { BottomSheetView } from '@gorhom/bottom-sheet';
 import { db } from '../../config/firebase';
 import { useApp } from '../../context/AppContext';
+import { formatAuthors, normalizeAuthors, type AuthorValue } from '../../utils/authors';
 
 type Artista = { uri: string; name: string; descripcion: string };
 
@@ -73,6 +74,7 @@ export default function Search() {
   const { user, uid, loading } = useAuth() as any;
   const userAny = user as any;
   const { nameA } = useLocalSearchParams();
+  const authorName = normalizeAuthors(nameA as AuthorValue)[0] ?? '';
 
   const modalRef = useRef<BottomSheetModal>(null);
   const modalRefL = useRef<BottomSheetModal>(null);
@@ -89,13 +91,9 @@ export default function Search() {
     </TouchableOpacity>
   );
 
-  useEffect(()=>{
-      try{
-        getTransactionsP();
-      }catch(err){
-        console.log(err)
-      }
-    },[])
+  useEffect(() => {
+    getTransactionsP();
+  }, [authorName]);
 
   useEffect(()=>{
       try{
@@ -133,16 +131,16 @@ export default function Search() {
   
 
   const getAutors = async () => {
-    const docRef = doc(db, "autores", String(nameA));
+    const docRef = doc(db, "autores", authorName);
     const docSnap = await getDoc(docRef);
     const info = docSnap.data();
     if (!info) {
-      setArtista({ uri: 'https://s1.ppllstatics.com/canarias7/www/multimedia/201704/14/media/cortadas/462076-1g_CSN462076_MG3928385--1248x702.jpg', name: String(nameA), descripcion: 'No se encontró información sobre este artista' });
+      setArtista({ uri: 'https://s1.ppllstatics.com/canarias7/www/multimedia/201704/14/media/cortadas/462076-1g_CSN462076_MG3928385--1248x702.jpg', name: authorName, descripcion: 'No se encontró información sobre este artista' });
       Alert.alert("No se encontró este artista","¿Quieres buscarlo en la web?", [
         {
           text: 'Si',
           onPress: () => {
-            openLink(String(nameA));
+            openLink(authorName);
           },
         },{
           text: 'No',
@@ -153,7 +151,7 @@ export default function Search() {
     }
     setArtista({
       uri: String(info?.uri ?? artista.uri),
-      name: String(info?.name ?? nameA),
+      name: String(info?.name ?? authorName),
       descripcion: String(info?.descripcion ?? ''),
     });
 
@@ -192,13 +190,38 @@ export default function Search() {
     }); 
 }
 
-  const getTransactionsP = async() => {
-      const q = query(collection(db, "musica"), where("autor","==", String(nameA)));
-      const docs = await getDocs(q);
-      const data = docs.docs.map(doc => doc.data() as any);
+  const getTransactionsP = async () => {
+    if (!authorName) {
+      setSongs([]);
+      setAllSee([]);
+      return;
+    }
+
+    try {
+      const music = collection(db, "musica");
+      const snapshots = await Promise.all([
+        getDocs(query(music, where("autor", "==", authorName))),
+        getDocs(query(music, where("autor", "array-contains", authorName))),
+        getDocs(query(music, where("autores", "==", authorName))),
+        getDocs(query(music, where("autores", "array-contains", authorName))),
+      ]);
+      const songsById = new Map<string, any>();
+
+      snapshots.forEach((snapshot) => {
+        snapshot.docs.forEach((songDoc) => {
+          songsById.set(songDoc.id, songDoc.data());
+        });
+      });
+
+      const data = Array.from(songsById.values());
       setSongs(data);
       setAllSee(data);
-}
+    } catch (error) {
+      console.error("Error cargando canciones del autor:", error);
+      setSongs([]);
+      setAllSee([]);
+    }
+  };
 
 const deletC = async () => {
     try {
@@ -247,7 +270,7 @@ async function descargarYGuardarArchivoLocalmente() {
     }
 
   try {
-    const cancion = {"name":actualS2.name,"img":actualS2.img,"autor":actualS2.autor,"letra":actualS2.letra,"dateU":Date.now()};
+    const cancion = {"name":actualS2.name,"img":actualS2.img,"autor":actualS2.autor,"autores":normalizeAuthors(actualS2.autores ?? actualS2.autor),"letra":actualS2.letra,"dateU":Date.now()};
 
     const fileInfo = await FileSystem.downloadAsync(
       actualS2.uri, // URL del archivo
@@ -399,7 +422,7 @@ useEffect(() => {
   }
 }
 
-  const change = async (uri: any, name: string, autor: string, img: string, generos: any, letra: any, dominant: any, index: number) => {  
+  const change = async (uri: any, name: string, autor: AuthorValue, img: string, generos: any, letra: any, dominant: any, index: number) => {
       console.log("indice Change",index,"||",currentIndexRef.current)
         if(musica[2] !== "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTkM03yBVebiMnBH5Kn2h3XazhS4sAIxn3w6w&s"){
             try {
@@ -407,9 +430,11 @@ useEffect(() => {
               const nombreArchivo = name+".mp3"
               const rutaLocal = `${FileSystem.documentDirectory}${nombreArchivo}`;
               const fileInfo = await FileSystem.getInfoAsync(rutaLocal);
+              const authorText = formatAuthors(autor);
               const trackData = {
                 title: name,
-                artist: autor,
+                artist: authorText,
+                autores: normalizeAuthors(autor),
                 artwork: img,
                 url: Array.isArray(uri)?uri[0]:uri,
                 vid: Array.isArray(uri)?uri[1]:null,
@@ -420,7 +445,7 @@ useEffect(() => {
                 dominantColor: dominant,
                 isLocal: fileInfo.exists,
               };
-              setMusica([name,autor,img,uri,generos,letra,artista.name,dominant]);
+              setMusica([name,authorText,img,uri,generos,letra,artista.name,dominant]);
               setCurrentTrack(trackData);
               setEstado(true);
               if (fileInfo.exists) {
@@ -431,6 +456,7 @@ useEffect(() => {
                   vid: trackData.vid,
                   title: trackData.title,
                   artist: trackData.artist,
+                  autores: trackData.autores,
                   artwork: trackData.artwork,
                   dominantColor: trackData.dominantColor,
                   generos: trackData.generos,
@@ -447,6 +473,7 @@ useEffect(() => {
                   vid: trackData.vid,
                   title: trackData.title,
                   artist: trackData.artist,
+                  autores: trackData.autores,
                   artwork: trackData.artwork,
                   dominantColor: trackData.dominantColor,
                   generos: trackData.generos,
@@ -535,6 +562,7 @@ useEffect(() => {
               img:actualS2.img,
               tipo:actualS2.tipo,
               autor:actualS2.autor,
+              autores: normalizeAuthors(actualS2.autores ?? actualS2.autor),
               generos:actualS2.generos,
               letra:letra, 
               dateU:Timestamp.now().toDate(),
@@ -584,6 +612,7 @@ useEffect(() => {
               img:actualS2.img,
               tipo:actualS2.tipo,
               autor:actualS2.autor,
+              autores: normalizeAuthors(actualS2.autores ?? actualS2.autor),
               generos:actualS2.generos,
               letra:letra, 
               dateU:Timestamp.now().toDate(),
@@ -620,7 +649,7 @@ const renderItem: ListRenderItem<any> = ({ item, index }) => {
     
 
     return (
-      <TouchableOpacity style={{padding:8}} onPress={() => change(item.uri, item.name, item.autor,item.img,item.generos,item.letra,item.dominantColor,index)}>
+      <TouchableOpacity style={{padding:8}} onPress={() => change(item.uri, item.name, item.autores ?? item.autor,item.img,item.generos,item.letra,item.dominantColor,index)}>
         <View style={styles.box}>
           <Image
             source={{ uri: `${item.img}` }}
@@ -650,10 +679,10 @@ const renderItem: ListRenderItem<any> = ({ item, index }) => {
                   marginLeft: 5,
                 }}
                 adjustsFontSizeToFit={true} numberOfLines={1}>
-                {item.autor}
+                 {formatAuthors(item.autores ?? item.autor)}
               </Text>
           </View>
-           <TouchableOpacity onPress={(()=>modalT(`${item.uri}`, `${item.name}`, `${item.autor}`, `${item.tipo}`, `${item.img}`,item.generos,item.letra,item.dominantColor))} style={{marginLeft:"auto", marginRight:10, paddingTop:10}}>
+               <TouchableOpacity onPress={(()=>modalT(`${item.uri}`, `${item.name}`, formatAuthors(item.autores ?? item.autor), `${item.tipo}`, `${item.img}`,item.generos,item.letra,item.dominantColor))} style={{marginLeft:"auto", marginRight:10, paddingTop:10}}>
               <Icon type={'ionicon'} name={'ellipsis-vertical'} color={'#CBCBCB'} size={RFValue(20)} style={{marginTop:0}} />
            </TouchableOpacity>
         </View>
@@ -772,10 +801,10 @@ const scrollHandler = useAnimatedScrollHandler({
             <Image
               source={{ uri: artista.uri }}
               style={{
-                width: "90%",
+                width: 200,
                 height: 200,
                 backgroundColor: 'gray',
-                borderRadius: 10,
+                borderRadius: 100,
                 resizeMode: 'cover',
               }}></Image>
             <View style={{ marginTop: 10, width:"100%", justifyContent: "space-between", flexDirection: 'row', }}>
@@ -846,7 +875,7 @@ const scrollHandler = useAnimatedScrollHandler({
           <Image source={{ uri: actualS2.img }} style={styles.image} />
           <View style={{ marginLeft: 10 }}>
             <Text style={styles.title} numberOfLines={1}>{actualS2.name}</Text>
-            <Text style={styles.subtitle} numberOfLines={1}>{actualS2.autor}</Text>
+            <Text style={styles.subtitle} numberOfLines={1}>{formatAuthors(actualS2.autores ?? actualS2.autor)}</Text>
           </View>
         </View>
 
@@ -889,7 +918,7 @@ const scrollHandler = useAnimatedScrollHandler({
             />
             <View style={{ marginLeft: 10 }}>
               <Text style={styles.title} numberOfLines={1}>{actualS2.name}</Text>
-              <Text style={styles.subtitle} numberOfLines={1}>{actualS2.autor}</Text>
+              <Text style={styles.subtitle} numberOfLines={1}>{formatAuthors(actualS2.autores ?? actualS2.autor)}</Text>
             </View>
           </View>
 

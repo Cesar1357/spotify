@@ -7,18 +7,18 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
-  AppState,
-  Dimensions,
-  FlatList,
-  Linking,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  ToastAndroid,
-  TouchableOpacity,
-  View
+    Alert,
+    AppState,
+    Dimensions,
+    FlatList,
+    Linking,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    ToastAndroid,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { Icon } from 'react-native-elements';
 import { Searchbar } from 'react-native-paper';
@@ -30,6 +30,7 @@ import { collection, deleteDoc, doc, getDoc, getDocs, increment, limit, onSnapsh
 import TrackPlayer, { Event, Track } from 'react-native-track-player';
 import { db } from '../../config/firebase';
 import { useApp } from '../../context/AppContext';
+import { formatAuthors, normalizeAuthors, type AuthorValue } from '../../utils/authors';
 
 function delay(n: number){
     return new Promise(function(resolve){
@@ -279,7 +280,7 @@ async function descargarYGuardarArchivoLocalmente() {
     }else{
     try {
       var dateU = Date.now()
-      const cancion = {"name":actualS2.name,"img":actualS2.img,"autor":actualS2.autor,"letra":actualS2.letra,"dateU":dateU}; 
+      const cancion = {"name":actualS2.name,"img":actualS2.img,"autor":actualS2.autor,"autores":normalizeAuthors(actualS2.autores ?? actualS2.autor),"letra":actualS2.letra,"dateU":dateU};
       console.log(actualS2);
 
       const fileInfo = await FileSystem.downloadAsync(
@@ -351,6 +352,7 @@ async function descargarYGuardarArchivoLocalmente() {
       dateU:Timestamp.now().toDate(),
       name:name,
       autor:autor,
+      autores: normalizeAuthors(autor),
       uri:uri,
       img:image,
       generos:generos,
@@ -365,6 +367,7 @@ async function descargarYGuardarArchivoLocalmente() {
       dateS:date,
       name:name,
       autor:autor,
+      autores: normalizeAuthors(autor),
       uri:uri,
       img:image,
       generos:generos,
@@ -501,21 +504,24 @@ async function descargarYGuardarArchivoLocalmente() {
     }
   }
 
-  const change = async (uri: any, name: string, autor: string, img: any, generos: any, letra: string, dominant: string) => {  
+  const change = async (uri: any, name: string, autor: AuthorValue, img: any, generos: any, letra: string, dominant: string) => {  
       if(musica[2] !== "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTkM03yBVebiMnBH5Kn2h3XazhS4sAIxn3w6w&s"){
           try {
             // Verificamos si el archivo existe
             const nombreArchivo = name+".mp3"
             const rutaLocal = `${FileSystem.documentDirectory}${nombreArchivo}`;
             const fileInfo = await FileSystem.getInfoAsync(rutaLocal);
+            const authorText = formatAuthors(autor);
+            const authors = normalizeAuthors(autor);
             if (fileInfo.exists) {
               console.log("ex")
-              setMusica([name,autor,img,uri,generos,letra,"Search",dominant])
+              setMusica([name,authorText,img,uri,generos,letra,"Search",dominant])
               await TrackPlayer.load({
                   id: 1,
                   url: rutaLocal, // Load media from the network
                   title: name,
-                  artist: autor,
+                  artist: authorText,
+                  autores: authors,
                   artwork: img, // Load artwork from the network
                   uri: uri,
                   generos: generos,
@@ -528,13 +534,14 @@ async function descargarYGuardarArchivoLocalmente() {
               await TrackPlayer.play();
             } else {
               console.log("noex")
-                setMusica([name,autor,img,uri,generos,letra,"Search",dominant])
+                setMusica([name,authorText,img,uri,generos,letra,"Search",dominant])
                 await TrackPlayer.load({
                   id: 1,
                   url: Array.isArray(uri)?uri[0]:uri, // Load media from the network
                   vid: Array.isArray(uri)?uri[1]:null,
                   title: name,
-                  artist: autor,
+                  artist: authorText,
+                  autores: authors,
                   artwork: img, // Load artwork from the network
                   uri: uri,
                   generos: generos,
@@ -637,7 +644,7 @@ async function descargarYGuardarArchivoLocalmente() {
 
     if(item.tipo === "Canción"){
     return (
-      <TouchableOpacity style={{padding:4}} onPress={() => change(item.uri, item.name, item.autor,item.img,item.generos,item.letra,item.dominantColor)}>
+      <TouchableOpacity style={{padding:4}} onPress={() => change(item.uri, item.name, item.autores ?? item.autor,item.img,item.generos,item.letra,item.dominantColor)}>
         <View style={styles.box}>
           <Image
             source={{ uri: `${item.img}` }}
@@ -669,10 +676,10 @@ async function descargarYGuardarArchivoLocalmente() {
                   marginLeft: 5,
                 }}
                 adjustsFontSizeToFit={true} numberOfLines={1}>
-                {item.autor}
+                {formatAuthors(item.autores ?? item.autor)}
               </Text>
           </View>
-           <TouchableOpacity onPress={(()=>modalT(item.uri, item.name, item.autor, item.tipo, item.img,item.generos,item.letra,item.dominantColor))}>
+           <TouchableOpacity onPress={(()=>modalT(item.uri, item.name, formatAuthors(item.autores ?? item.autor), item.tipo, item.img,item.generos,item.letra,item.dominantColor))}>
               <Icon type={'ionicon'} name={'ellipsis-vertical'} color={'#A0A0A0'} size={RFValue(20)} style={{marginTop:0}} />
            </TouchableOpacity>
         </View>
@@ -681,7 +688,7 @@ async function descargarYGuardarArchivoLocalmente() {
     }
     if(item.tipo === "Historial"){
     return (
-      <TouchableOpacity style={{padding:4}} onPress={() => change(item.uri, item.name, item.autor, item.img,item.generos,item.letra,item.dominantColor)}>
+      <TouchableOpacity style={{padding:4}} onPress={() => change(item.uri, item.name, item.autores ?? item.autor, item.img,item.generos,item.letra,item.dominantColor)}>
         <View style={styles.box}>      
           <Image
             source={{ uri: `${item.img}` }}
@@ -732,7 +739,7 @@ async function descargarYGuardarArchivoLocalmente() {
                   marginLeft: 5,
                 }}
                 adjustsFontSizeToFit={true} numberOfLines={1}>
-                {item.autor}
+                {formatAuthors(item.autores ?? item.autor)}
               </Text>
             </View>
           </View>
@@ -891,7 +898,7 @@ async function descargarYGuardarArchivoLocalmente() {
     }
     if(item.tipo === "HistorialPl"){
     return (
-      <TouchableOpacity style={{padding:4}} onPress={() => updatePla(item.uid,item.nameP,item.autor)}> 
+      <TouchableOpacity style={{padding:4}} onPress={() => updatePla(item.uid,item.nameP,formatAuthors(item.autores ?? item.autor))}> 
         <View style={styles.box}>      
           <Image
             source={{ uri: "https://images.squarespace-cdn.com/content/v1/587d4a02bebafb893ba07d90/1484886557050-V261JTTHHGX0O3KHW5OX/ui-ux-playlist-gen-icon.png" }} 
@@ -922,7 +929,7 @@ async function descargarYGuardarArchivoLocalmente() {
                   marginTop: 2,
                   marginLeft: 2,
                 }}>
-               {item.autor} · Historial 
+               {formatAuthors(item.autores ?? item.autor)} · Historial
               </Text>
             </View>
           </View>
@@ -995,6 +1002,7 @@ const getLikesPlaylist = async (playlist: string) => {
             img:actualS2.img,
             tipo:actualS2.tipo,
             autor:actualS2.autor,
+            autores: normalizeAuthors(actualS2.autores ?? actualS2.autor),
             generos:actualS2.generos,
             dominantColor:dominant,
             letra:letra, 
@@ -1051,6 +1059,7 @@ const getLikesPlaylist = async (playlist: string) => {
             img:actualS2.img,
             tipo:actualS2.tipo,
             autor:actualS2.autor,
+            autores: normalizeAuthors(actualS2.autores ?? actualS2.autor),
             generos:actualS2.generos,
             dominantColor:dominant,
             letra:letra, 
@@ -1165,7 +1174,7 @@ const getLikesPlaylist = async (playlist: string) => {
           />
           <View style={{ marginLeft: 10 }}>
             <Text style={styles.title} numberOfLines={1}>{actualS2.name}</Text>
-            <Text style={styles.subtitle} numberOfLines={1}>{actualS2.autor}</Text>
+            <Text style={styles.subtitle} numberOfLines={1}>{formatAuthors(actualS2.autores ?? actualS2.autor)}</Text>
           </View>
         </View>
         
@@ -1258,7 +1267,7 @@ const getLikesPlaylist = async (playlist: string) => {
             />
             <View style={{ marginLeft: 10 }}>
               <Text style={styles.title} numberOfLines={1}>{actualS2.name}</Text>
-              <Text style={styles.subtitle} numberOfLines={1}>{actualS2.autor}</Text>
+              <Text style={styles.subtitle} numberOfLines={1}>{formatAuthors(actualS2.autores ?? actualS2.autor)}</Text>
             </View>
           </View>
 
@@ -1268,7 +1277,7 @@ const getLikesPlaylist = async (playlist: string) => {
             router.push({
               pathname: "/(screens)/Autor",
               params: {
-                nameA: actualS2.autor,
+                nameA: normalizeAuthors(actualS2.autores ?? actualS2.autor)[0] ?? '',
               }
             });
             modalRef.current?.close();

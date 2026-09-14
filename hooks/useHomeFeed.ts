@@ -10,9 +10,13 @@ export type HomeFeedSetters = {
   setAllTransactionsP: React.Dispatch<React.SetStateAction<any[]>>;
   setAllTransactionsN: React.Dispatch<React.SetStateAction<any[]>>;
   setAllTransactionsL: React.Dispatch<React.SetStateAction<any[]>>;
-  setAllTransactionsPop: React.Dispatch<React.SetStateAction<any[]>>;
   setAllTransactionsAmbient: React.Dispatch<React.SetStateAction<any[]>>;
   setAllTransactionsDreamcore: React.Dispatch<React.SetStateAction<any[]>>;
+  setAllTransactionsMood: React.Dispatch<React.SetStateAction<any[]>>;
+  setMoodTitle: React.Dispatch<React.SetStateAction<string>>;
+  setDynamicGenreSections: React.Dispatch<React.SetStateAction<any[]>>;
+  setFeaturedArtistSongs: React.Dispatch<React.SetStateAction<any[]>>;
+  setFeaturedArtistName: React.Dispatch<React.SetStateAction<string>>;
   setAllTransactionsPlaylistsO: React.Dispatch<React.SetStateAction<any[]>>;
   setPlaylists3: React.Dispatch<React.SetStateAction<any[]>>;
   setLastS3: React.Dispatch<React.SetStateAction<any[]>>;
@@ -20,7 +24,6 @@ export type HomeFeedSetters = {
   setAllTransactionsArtistas2: React.Dispatch<React.SetStateAction<any[]>>;
   setDondeP: React.Dispatch<React.SetStateAction<any | null>>;
   setDondeN: React.Dispatch<React.SetStateAction<any | null>>;
-  setDondePop: React.Dispatch<React.SetStateAction<any | null>>;
   setDondeAmbient: React.Dispatch<React.SetStateAction<any | null>>;
   setDondeDreamcore: React.Dispatch<React.SetStateAction<any | null>>;
 };
@@ -32,9 +35,13 @@ export const useHomeFeed = (uid: string | null, setters: HomeFeedSetters) => {
     setAllTransactionsP,
     setAllTransactionsN,
     setAllTransactionsL,
-    setAllTransactionsPop,
     setAllTransactionsAmbient,
     setAllTransactionsDreamcore,
+    setAllTransactionsMood,
+    setMoodTitle,
+    setDynamicGenreSections,
+    setFeaturedArtistSongs,
+    setFeaturedArtistName,
     setAllTransactionsPlaylistsO,
     setPlaylists3,
     setLastS3,
@@ -42,7 +49,6 @@ export const useHomeFeed = (uid: string | null, setters: HomeFeedSetters) => {
     setAllTransactionsArtistas2,
     setDondeP,
     setDondeN,
-    setDondePop,
     setDondeAmbient,
     setDondeDreamcore,
   } = setters;
@@ -84,6 +90,60 @@ export const useHomeFeed = (uid: string | null, setters: HomeFeedSetters) => {
     setAllTransactionsL(recommendations);
   }, [uid, setAllTransactionsL]);
 
+  const fetchTimeBasedRecommendations = useCallback(async () => {
+    if (!uid) return;
+
+    const hour = new Date().getHours();
+    const timeGenres = hour < 6
+      ? ['ambient', 'dreamcore', 'lofi']
+      : hour < 12
+        ? ['pop', 'acoustic', 'indie']
+        : hour < 18
+          ? ['pop', 'electronic', 'rock']
+          : ['ambient', 'dreamcore', 'relaxing'];
+    const title = hour < 6
+      ? 'Sesión nocturna'
+      : hour < 12
+        ? 'Para empezar el día'
+        : hour < 18
+          ? 'Energía para tu día'
+          : 'Para desconectar un rato';
+
+    const likedSnapshot = await getDocs(query(collection(db, 'people', uid, 'playlists', 'Likes', 'Likes'), limit(30)));
+    const likedSongs = likedSnapshot.docs.map((songDoc) => songDoc.data() as any);
+    const likedGenres = likedSongs.flatMap((song) => Array.isArray(song.generos) ? song.generos : []);
+    const genres = [...new Set([...likedGenres, ...timeGenres])].slice(0, 10);
+    let candidates: any[] = [];
+
+    if (genres.length > 0) {
+      const genreSnapshot = await getDocs(query(
+        collection(db, 'musica'),
+        where('generos', 'array-contains-any', genres),
+        limit(30),
+      ));
+      candidates = genreSnapshot.docs.map((songDoc) => songDoc.data() as any);
+    }
+
+    const likedNames = new Set(likedSongs.map((song) => song.name));
+    const recommendations = candidates
+      .filter((song) => song.name && !likedNames.has(song.name))
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 8);
+
+    if (recommendations.length < 4) {
+      const popularSnapshot = await getDocs(query(collection(db, 'musica'), orderBy('popularity', 'desc'), limit(15)));
+      popularSnapshot.docs.forEach((songDoc) => {
+        const song = songDoc.data() as any;
+        if (song.name && !likedNames.has(song.name) && !recommendations.some((item) => item.name === song.name)) {
+          recommendations.push(song);
+        }
+      });
+    }
+
+    setMoodTitle(title);
+    setAllTransactionsMood(recommendations.slice(0, 8));
+  }, [uid, setAllTransactionsMood, setMoodTitle]);
+
   const fetchUser = useCallback(async () => {
     if (!uid) return;
     const docRef = doc(db, 'people', uid);
@@ -92,7 +152,8 @@ export const useHomeFeed = (uid: string | null, setters: HomeFeedSetters) => {
     setUser(info);
     if (info?.colorA) setColorA(info.colorA);
     await fetchLikedRecommendations(info);
-  }, [uid, setUser, setColorA, fetchLikedRecommendations]);
+    await fetchTimeBasedRecommendations();
+  }, [uid, setUser, setColorA, fetchLikedRecommendations, fetchTimeBasedRecommendations]);
 
   const fetchPlaylistsOthers = useCallback(async () => {
     const q = query(collection(db, 'playlists'), orderBy('popularity', 'desc'));
@@ -107,11 +168,90 @@ export const useHomeFeed = (uid: string | null, setters: HomeFeedSetters) => {
 
   const fetchTransactionsP = useCallback(async () => {
     const q = query(collection(db, 'musica'), orderBy('popularity', 'desc'), limit(5));
-    const querySnapshot = await getDocs(q);
-    const data = querySnapshot.docs.map((doc) => doc.data() as any);
+    let querySnapshot = await getDocs(q);
+    if (querySnapshot.empty) {
+      querySnapshot = await getDocs(query(collection(db, 'musica'), orderBy('dateU', 'desc'), limit(5)));
+    }
+    const data = querySnapshot.docs
+      .map((doc) => doc.data() as any)
+      .filter((song, index, songs) => song.name && songs.findIndex((item) => item.name === song.name) === index);
     setAllTransactionsP(data);
     setDondeP(querySnapshot.docs[querySnapshot.docs.length - 1]);
   }, [setAllTransactionsP, setDondeP]);
+
+  const fetchDynamicGenreSections = useCallback(async () => {
+    const sourceSnapshot = await getDocs(query(collection(db, 'musica'), limit(300)));
+    const sourceSongs = sourceSnapshot.docs.map((songDoc) => songDoc.data() as any);
+    const genreGroups = new Map<string, { value: string; songs: any[] }>();
+
+    const normalizeGenreKey = (value: string) => value
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\b(labels?|entertainment|records?|music|company|agency)\b/g, '')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+
+    sourceSongs.forEach((song) => {
+      const genres = Array.isArray(song.generos)
+        ? song.generos
+        : typeof song.generos === 'string'
+          ? song.generos.split(',')
+          : [];
+      const genreValues: string[] = Array.from(new Set(genres.map((genre: unknown) => String(genre).trim()).filter(Boolean)));
+      genreValues.forEach((value: string) => {
+          const key = normalizeGenreKey(value);
+          if (!key) return;
+          const current = genreGroups.get(key) ?? { value, songs: [] };
+          if (!current.songs.some((item) => item.name === song.name)) current.songs.push(song);
+          genreGroups.set(key, current);
+        });
+    });
+
+    const excludedGenres = new Set(['pop', 'ambient', 'dreamcore']);
+    const candidates = [...genreGroups.entries()]
+      .filter(([genre, data]) => !excludedGenres.has(genre) && data.songs.length >= 3)
+      .sort(([, dataA], [, dataB]) => dataB.songs.length - dataA.songs.length);
+    const selectedGenres: { key: string; value: string; songs: any[] }[] = [];
+    const usedSongNames = new Set<string>();
+
+    for (const [key, data] of candidates) {
+      const newSongs = data.songs.filter((song) => song.name && !usedSongNames.has(song.name));
+      if (newSongs.length < 3) continue;
+      selectedGenres.push({ key, value: data.value, songs: newSongs.slice(0, 8) });
+      newSongs.forEach((song) => usedSongNames.add(song.name));
+      if (selectedGenres.length === 20) break;
+    }
+
+    const sectionTitles = [
+      'Descubre',
+      'Tu lado',
+      'Selección',
+      'Explora',
+      'Viaja por',
+      'Sumérgete en',
+      'Favoritos de',
+      'Sonidos de',
+      'Ruta',
+      'Universo',
+      'Esencia',
+      'Vibras de',
+      'Colección',
+      'Paisaje',
+      'Conoce',
+      'Sesión',
+      'Frecuencia',
+      'Archivo',
+      'Panorama',
+      'Radar',
+    ];
+    const sections = selectedGenres.map((genre, index) => {
+      const label = genre.value.charAt(0).toUpperCase() + genre.value.slice(1);
+      return { genre: genre.key, title: `${sectionTitles[index] ?? 'Descubre'} ${label}`, songs: genre.songs };
+    });
+
+    setDynamicGenreSections(sections);
+  }, [setDynamicGenreSections]);
 
   const fetchMoreTransactionsP = useCallback(async (user: any, allTransactionsP: any[], dondeP: any | null) => {
     if (!user?.premium || allTransactionsP.length >= 14 || !dondeP) return;
@@ -179,7 +319,21 @@ export const useHomeFeed = (uid: string | null, setters: HomeFeedSetters) => {
     const shuffledData = data.sort(() => Math.random() - 0.5);
     setAllTransactionsArtistas(shuffledData.slice(0, Math.max(0, Math.floor(shuffledData.length / 2) - 1)));
     setAllTransactionsArtistas2(shuffledData.slice(Math.floor(shuffledData.length / 2)));
-  }, [setAllTransactionsArtistas, setAllTransactionsArtistas2]);
+
+    const featuredArtist = shuffledData[0]?.name;
+    if (!featuredArtist) return;
+    const music = collection(db, 'musica');
+    const snapshots = await Promise.all([
+      getDocs(query(music, where('autor', '==', featuredArtist))),
+      getDocs(query(music, where('autor', 'array-contains', featuredArtist))),
+      getDocs(query(music, where('autores', '==', featuredArtist))),
+      getDocs(query(music, where('autores', 'array-contains', featuredArtist))),
+    ]);
+    const songsById = new Map<string, any>();
+    snapshots.forEach((snapshot) => snapshot.docs.forEach((songDoc) => songsById.set(songDoc.id, songDoc.data())));
+    setFeaturedArtistName(featuredArtist);
+    setFeaturedArtistSongs(Array.from(songsById.values()).slice(0, 8));
+  }, [setAllTransactionsArtistas, setAllTransactionsArtistas2, setFeaturedArtistName, setFeaturedArtistSongs]);
 
   const updatePlaylistPopularity = useCallback(async (nameA: string, name: string) => {
     const playlistId = `${nameA}_${name}`;
@@ -191,15 +345,15 @@ export const useHomeFeed = (uid: string | null, setters: HomeFeedSetters) => {
     await Promise.all([
       fetchPlaylistsOthers(),
       fetchTransactionsP(),
+      fetchDynamicGenreSections(),
       fetchTransactionsN(),
-      fetchGenreSection('pop', setAllTransactionsPop, setDondePop),
       fetchGenreSection('ambient', setAllTransactionsAmbient, setDondeAmbient),
       fetchGenreSection('dreamcore', setAllTransactionsDreamcore, setDondeDreamcore),
       fetchPlaylists(),
       fetchLastLikes(),
       fetchArtists(),
     ]);
-  }, [fetchPlaylistsOthers, fetchTransactionsP, fetchTransactionsN, fetchGenreSection, fetchPlaylists, fetchLastLikes, fetchArtists, setAllTransactionsPop, setDondePop, setAllTransactionsAmbient, setDondeAmbient, setAllTransactionsDreamcore, setDondeDreamcore]);
+  }, [fetchPlaylistsOthers, fetchTransactionsP, fetchDynamicGenreSections, fetchTransactionsN, fetchGenreSection, fetchPlaylists, fetchLastLikes, fetchArtists, setAllTransactionsAmbient, setDondeAmbient, setAllTransactionsDreamcore, setDondeDreamcore]);
 
   return {
     fetchUser,

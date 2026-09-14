@@ -7,14 +7,14 @@ import * as FileSystem from 'expo-file-system';
 import { Image } from 'expo-image';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  AppState,
-  Dimensions,
-  SectionList,
-  StyleSheet,
-  Text,
-  ToastAndroid,
-  TouchableOpacity,
-  View
+    AppState,
+    Dimensions,
+    SectionList,
+    StyleSheet,
+    Text,
+    ToastAndroid,
+    TouchableOpacity,
+    View
 } from 'react-native';
 
 import { Icon } from 'react-native-elements';
@@ -23,6 +23,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Repro from '../../components/Repro'; // Asegúrate de que esté en esta ruta
 import { db } from '../../config/firebase';
 import { useApp } from '../../context/AppContext';
+import { formatAuthors, normalizeAuthors, type AuthorValue } from '../../utils/authors';
 
 dayjs.extend(isToday);
 dayjs.extend(isYesterday);
@@ -146,16 +147,19 @@ const getMoreHistorial =async () => {
     await deleteDoc(ref)
   }
 
-   const change = async (uri: any, name: string, autor: string, img: string, generos: any, letra: any, dominant: any, index: number) => {  
+  const change = async (uri: any, name: string, autor: AuthorValue, img: string, generos: any, letra: any, dominant: any, index: number) => {  
       console.log("indice Change",index,"||",currentIndexRef.current)
             try {
               // Verificamos si el archivo existe
               const nombreArchivo = name+".mp3"
               const rutaLocal = `${FileSystem.documentDirectory}${nombreArchivo}`;
               const fileInfo = await FileSystem.getInfoAsync(rutaLocal);
+              const authorText = formatAuthors(autor);
+              const authors = normalizeAuthors(autor);
               const trackData = {
                 title: name,
-                artist: autor,
+                artist: authorText,
+                autores: authors,
                 artwork: img,
                 url: Array.isArray(uri)?uri[0]:uri,
                 vid: Array.isArray(uri)?uri[1]:null,
@@ -166,7 +170,7 @@ const getMoreHistorial =async () => {
                 dominantColor: dominant,
                 isLocal: fileInfo.exists,
               };
-              setMusica([name,autor,img,uri,generos,letra,"Historial",dominant]);
+              setMusica([name,authorText,img,uri,generos,letra,"Historial",dominant]);
               setCurrentTrack(trackData);
               setEstado(true);
               if (fileInfo.exists) {
@@ -177,6 +181,7 @@ const getMoreHistorial =async () => {
                   vid: trackData.vid,
                   title: trackData.title,
                   artist: trackData.artist,
+                  autores: trackData.autores,
                   artwork: trackData.artwork,
                   dominantColor: trackData.dominantColor,
                   generos: trackData.generos,
@@ -193,6 +198,7 @@ const getMoreHistorial =async () => {
                   vid: trackData.vid,
                   title: trackData.title,
                   artist: trackData.artist,
+                  autores: trackData.autores,
                   artwork: trackData.artwork,
                   dominantColor: trackData.dominantColor,
                   generos: trackData.generos,
@@ -245,7 +251,7 @@ const getMoreHistorial =async () => {
 
    
     return (
-      <TouchableOpacity style={{padding:8}} onPress={() => change(item.uri, item.name, item.autor, item.img,item.generos,item.letra,item.dominantColor,index)}>
+      <TouchableOpacity style={{padding:8}} onPress={() => change(item.uri, item.name, item.autores ?? item.autor, item.img,item.generos,item.letra,item.dominantColor,index)}>
         <View style={styles.box}>      
           <Image
             source={{ uri: `${item.img}` }}
@@ -277,7 +283,7 @@ const getMoreHistorial =async () => {
                   maxWidth:"60%"
                 }}
                 numberOfLines={1}>
-                {item.autor}
+                {formatAuthors(item.autores ?? item.autor)}
               </Text>
               <Text
                 style={{

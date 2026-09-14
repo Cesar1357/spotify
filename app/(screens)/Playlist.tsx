@@ -12,18 +12,18 @@ import { ExternalLink } from '@/components/ExternalLink';
 import { BottomSheetBackdrop, BottomSheetFlatList, BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet/src';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
-  BackHandler,
-  Dimensions,
-  FlatList,
-  Keyboard,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  ToastAndroid,
-  TouchableOpacity,
-  View
+    Alert,
+    BackHandler,
+    Dimensions,
+    FlatList,
+    Keyboard,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    ToastAndroid,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { Icon } from 'react-native-elements';
 import { Modal, Searchbar } from 'react-native-paper';
@@ -32,6 +32,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Repro from '../../components/Repro'; // Asegúrate de que esté en esta ruta
 import { db } from '../../config/firebase';
 import { useApp } from '../../context/AppContext';
+import { formatAuthors, normalizeAuthors, type AuthorValue } from '../../utils/authors';
 
 import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, orderBy, query, setDoc, Timestamp, writeBatch } from "firebase/firestore";
 
@@ -41,6 +42,7 @@ type Track = {
   vid?: any;
   title?: string;
   artist?: string;
+  autores?: string[];
   artwork?: string;
   dominantColor?: string;
   generos?: any;
@@ -147,7 +149,8 @@ export default function Search() {
             url: urlFinal,
             vid: Array.isArray(item.uri) ? item.uri[1] : null,
             title: item.name,
-            artist: item.autor,
+            artist: formatAuthors(item.autor ?? item.autores),
+            autores: normalizeAuthors(item.autor ?? item.autores),
             artwork: item.img,
             dominantColor: item.dominantColor,
             generos: item.generos,
@@ -331,7 +334,7 @@ export default function Search() {
   }
 
 
-  const change = async (uri: any, name: string, autor: string, img: string, generos: any, letra: any, dominant: any, index: number) => {  
+  const change = async (uri: any, name: string, autor: AuthorValue, img: string, generos: any, letra: any, dominant: any, index: number) => {  
     console.log("indice Change",index,"||",currentIndexRef.current)
       if(musica[2] !== "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTkM03yBVebiMnBH5Kn2h3XazhS4sAIxn3w6w&s"){
           try {
@@ -339,15 +342,18 @@ export default function Search() {
             const nombreArchivo = name+".mp3"
             const rutaLocal = `${FileSystem.documentDirectory}${nombreArchivo}`;
             const fileInfo = await FileSystem.getInfoAsync(rutaLocal);
+            const authorText = formatAuthors(autor);
+            const authors = normalizeAuthors(autor);
             if (fileInfo.exists) {
               console.log("ex")
-              setMusica([name,autor,img,uri,generos,letra,qplaylist,dominant])
+              setMusica([name,authorText,img,uri,generos,letra,qplaylist,dominant])
               await TrackPlayer.load({
                 id: index,
                 url: rutaLocal,
                 vid: Array.isArray(uri)?uri[1]:null,
                 title: name,
-                artist: autor,
+                artist: authorText,
+                autores: authors,
                 artwork: img,
                 dominantColor: dominant,
                 generos: generos,
@@ -360,13 +366,14 @@ export default function Search() {
             } else {
               console.log("noex")
               try {
-                setMusica([name,autor,img,uri,generos,letra,qplaylist,dominant])
+                setMusica([name,authorText,img,uri,generos,letra,qplaylist,dominant])
                 await TrackPlayer.load({
                 id: index,
                 url: Array.isArray(uri)?uri[0]:uri,
                 vid: Array.isArray(uri)?uri[1]:null,
                 title: name,
-                artist: autor,
+                artist: authorText,
+                autores: authors,
                 artwork: img,
                 dominantColor: dominant,
                 generos: generos,
@@ -439,13 +446,15 @@ export default function Search() {
 
     const normalizeTrack = (item: any) => {
       const url = item.url ?? (Array.isArray(item.uri) ? item.uri[0] : item.uri) ?? item.audio ?? item.src ?? null;
+        const authors = normalizeAuthors(item.autores ?? item.autor ?? item.artist);
       return {
+        ...item,
         ...(item.id !== undefined ? { id: item.id } : {}),
         url,
         title: item.title ?? item.name ?? '',
-        artist: item.artist ?? item.autor ?? '',
+        artist: formatAuthors(authors),
+        autores: authors,
         artwork: item.artwork ?? item.img ?? undefined,
-        ...item,
       };
     };
 
@@ -714,7 +723,7 @@ async function descargarYGuardarArchivoLocalmente() {
     }else{
     try {
       var dateU = Date.now()
-      const cancion = {"name":actualS2.name,"img":actualS2.img,"autor":actualS2.autor,"letra":actualS2.letra,"dateU":dateU, "dominantColor":actualS2.dominantColor}; 
+      const cancion = {"name":actualS2.name,"img":actualS2.img,"autor":actualS2.autor,"autores":normalizeAuthors(actualS2.autores ?? actualS2.autor),"letra":actualS2.letra,"dateU":dateU, "dominantColor":actualS2.dominantColor};
 
       const fileInfo = await FileSystem.downloadAsync(
         actualS2.uri, // URL del archivo
@@ -859,7 +868,7 @@ const renderItem = ({ item, index }: { item: any; index: number }) => {
     
 
     return (
-      <TouchableOpacity style={{padding:8}} onPress={() => change(`${item.name}`,`${item.autor}`,`${item.img}`,`${item.uri}`,item.letra,index,item.dominantColor,index)}>
+      <TouchableOpacity style={{padding:8}} onPress={() => change(`${item.name}`,`${item.autores ?? item.autor}`,`${item.img}`,`${item.uri}`,item.letra,index,item.dominantColor,index)}>
         <View style={styles.box}>
           <Image
             source={{ uri: `${item.img}` }}
@@ -909,11 +918,11 @@ const renderItem = ({ item, index }: { item: any; index: number }) => {
                   marginLeft: 5,
                 }}
                 adjustsFontSizeToFit={true} numberOfLines={1}>
-                {item.autor}
+                {formatAuthors(item.autores ?? item.autor)}
               </Text>
             </View>
           </View>
-           <TouchableOpacity onPress={(()=>modalT(`${item.uri}`, item.name, item.autor, item.tipo, item.img,item.generos,item.letra,item.dominantColor))}>
+           <TouchableOpacity onPress={(()=>modalT(`${item.uri}`, item.name, formatAuthors(item.autores ?? item.autor), item.tipo, item.img,item.generos,item.letra,item.dominantColor))}>
               <Icon type={'ionicon'} name={'ellipsis-vertical'} color={'#CBCBCB'} size={RFValue(20)} style={{marginTop:5}} />
            </TouchableOpacity>
         </View>
@@ -984,6 +993,7 @@ const getLikesPlaylist = async (playlist: string) => {
             img:actualS2.img,
             tipo:actualS2.tipo,
             autor:actualS2.autor,
+            autores: normalizeAuthors(actualS2.autores ?? actualS2.autor),
             generos:actualS2.generos,
             dominantColor:dominant,
             letra:letra, 
@@ -1040,6 +1050,7 @@ const getLikesPlaylist = async (playlist: string) => {
             img:actualS2.img,
             tipo:actualS2.tipo,
             autor:actualS2.autor,
+            autores: normalizeAuthors(actualS2.autores ?? actualS2.autor),
             generos:actualS2.generos,
             dominantColor:dominant,
             letra:letra, 
@@ -1195,7 +1206,7 @@ const activateA = async () => {
           url: urlFinal,
           vid: Array.isArray(item.uri) ? item.uri[1] : null,
           title: item.name,
-          artist: item.autor,
+          artist: formatAuthors(item.autores ?? item.autor),
           artwork: item.img,
           dominantColor: item.dominantColor,
           generos: item.generos,
@@ -1409,7 +1420,7 @@ const activateA = async () => {
           <Image source={{ uri: actualS2.img }} style={styles.image} />
           <View style={{ marginLeft: 10 }}>
             <Text style={styles.title} numberOfLines={1}>{actualS2.name}</Text>
-            <Text style={styles.subtitle} numberOfLines={1}>{actualS2.autor}</Text>
+            <Text style={styles.subtitle} numberOfLines={1}>{formatAuthors(actualS2.autores ?? actualS2.autor)}</Text>
           </View>
         </View>
 
@@ -1472,7 +1483,7 @@ const activateA = async () => {
             />
             <View style={{ marginLeft: 10 }}>
               <Text style={styles.title} numberOfLines={1}>{actualS2.name}</Text>
-              <Text style={styles.subtitle} numberOfLines={1}>{actualS2.autor}</Text>
+              <Text style={styles.subtitle} numberOfLines={1}>{formatAuthors(actualS2.autores ?? actualS2.autor)}</Text>
             </View>
           </View>
 
@@ -1482,7 +1493,7 @@ const activateA = async () => {
             router.push({
               pathname: "/(screens)/Autor",
               params: {
-                nameA: actualS2.autor,
+                nameA: normalizeAuthors(actualS2.autores ?? actualS2.autor)[0] ?? '',
               }
             });
             modalRef.current?.close();

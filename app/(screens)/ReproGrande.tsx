@@ -5,18 +5,18 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { usePathname } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
-  Animated as AnimatedR,
-  AppState,
-  BackHandler,
-  Dimensions,
-  InteractionManager,
-  Linking,
-  StyleSheet,
-  Text,
-  ToastAndroid,
-  TouchableOpacity,
-  View
+    Alert,
+    Animated as AnimatedR,
+    AppState,
+    BackHandler,
+    Dimensions,
+    InteractionManager,
+    Linking,
+    StyleSheet,
+    Text,
+    ToastAndroid,
+    TouchableOpacity,
+    View
 } from 'react-native';
 
 import { useAds } from "@/hooks/useAds";
@@ -43,6 +43,7 @@ import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, orderBy, query
 import TrackPlayer, { Event, State, useProgress } from 'react-native-track-player';
 import { db } from '../../config/firebase';
 import { useApp } from '../../context/AppContext';
+import { formatAuthors, normalizeAuthors, type AuthorValue } from '../../utils/authors';
 
 type AnyObject = { [key: string]: any };
 
@@ -149,7 +150,7 @@ export default function Repro() {
   const [nextLine, setNextLine] = useState('');
   const animatedValue = useSharedValue(1);
 
-  const [artista, setArtista] = useState<AnyObject>({});
+  const [artistas, setArtistas] = useState<AnyObject[]>([]);
 
   let numerosDisponibles: number[] = [];
   let numerosSeleccionados: number[] = [];
@@ -409,13 +410,14 @@ export default function Repro() {
         if (trackId != null) {
           const track = await TrackPlayer.getTrack(trackId);
           if (track) {
-            if (typeof track.artist === 'string' && typeof track.title === 'string') {
+            if (track.title) {
               await getAutors(track.artist, track.title);
             }
+            const authorText = formatAuthors(track.artist ?? track.autor ?? track.autores);
             if(musica[6]){
-              setMusica([track.title,track.artist,track.artwork,[track.url,track.vid],track.generos,track.letra,reproduciendoD,track.dominantColor]);
+              setMusica([track.title,authorText,track.artwork,[track.url,track.vid],track.generos,track.letra,reproduciendoD,track.dominantColor]);
             }else{
-              setMusica([track.title,track.artist,track.artwork,[track.url,track.vid],track.generos,track.letra,track.donde,track.dominantColor]);
+              setMusica([track.title,authorText,track.artwork,[track.url,track.vid],track.generos,track.letra,track.donde,track.dominantColor]);
               setReproduciendoD(track.donde);
             }
             console.log("trackIniPrimeravezSoloReproGrande")
@@ -471,7 +473,7 @@ export default function Repro() {
           if (e.track != null) {
             const trackA = await TrackPlayer.getTrack(e.track);
             if(track){
-              setMusica([track.title,track.artist,track.artwork,[track.url,track.vid],track.generos,track.letra,reproduciendoD,track.dominantColor]);
+              setMusica([track.title,formatAuthors(track.artist ?? track.autor ?? track.autores),track.artwork,[track.url,track.vid],track.generos,track.letra,reproduciendoD,track.dominantColor]);
               if (trackA?.isAd) {
                 console.log("✅ Anuncio terminado, regresando a música");
                 await TrackPlayer.remove(e.track); // elimina el anuncio de la cola
@@ -480,10 +482,10 @@ export default function Repro() {
               }
             }
           } else if (track) {
-            setMusica([track.title,track.artist,track.artwork,[track.url,track.vid],track.generos,track.letra,reproduciendoD,track.dominantColor]);
+            setMusica([track.title,formatAuthors(track.artist ?? track.autor ?? track.autores),track.artwork,[track.url,track.vid],track.generos,track.letra,reproduciendoD,track.dominantColor]);
           }
             if (track) {
-              if (typeof track.artist === 'string' && typeof track.title === 'string') {
+              if (track.title) {
                 await getAutors(track.artist, track.title);
               }
               console.log("||ReproGrande",track?.title); 
@@ -583,55 +585,31 @@ export default function Repro() {
     }
   },[db,uid])
 
-  const getAutors =async (artist: string, nameSong:string) => {
+  const getAutors = async (artist: AuthorValue, nameSong: string) => {
     try{
-      console.log(" autor 1")
-      if(artista.name !== artist){
-        try{
-          if(artist === "Anuncio"){
-            setArtista({
-                "name": artist,
-                "uri": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTkM03yBVebiMnBH5Kn2h3XazhS4sAIxn3w6w&s",
-                "descripcion": "Video corto de entretenimiento",
-                "tipo":"Artista",
-              })
-              return;
-          }
-          const docRef = doc(db, "autores", artist);
-          const docSnap = await getDoc(docRef);
-          const info = docSnap.data()
-          console.log("Obteniendo datos:", docSnap.exists(), info);
-          if(!docSnap.exists()){
-            console.log("autor 2, no existe")
-              setArtista({
-                "name": artist,
-                "uri": "https://s1.ppllstatics.com/canarias7/www/multimedia/201704/14/media/cortadas/462076-1g_CSN462076_MG3928385--1248x702.jpg",
-                "descripcion": "No hay información disponible",
-                "tipo":"Artista",
-              })
-          }else{
-            setArtista(info ?? {});
-          }
-          console.log(info,"Artista");
-        } catch(err){
-          console.log(err)
-          setArtista({
-              "name": artist,
-              "uri": "https://s1.ppllstatics.com/canarias7/www/multimedia/201704/14/media/cortadas/462076-1g_CSN462076_MG3928385--1248x702.jpg",
-              "descripcion": "No hay información disponible",
-              "tipo":"Artista",
-            })
+      const authorNames = normalizeAuthors(artist);
+      const fallbackUri = "https://s1.ppllstatics.com/canarias7/www/multimedia/201704/14/media/cortadas/462076-1g_CSN462076_MG3928385--1248x702.jpg";
+      const adUri = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTkM03yVebiMnBH5Kn2h3XazhS4sAIxn3w6w&s";
+      const profiles = await Promise.all(authorNames.map(async (authorName) => {
+        if (authorName === "Anuncio") {
+          return { name: authorName, uri: adUri, descripcion: "Video corto de entretenimiento", tipo: "Artista" };
         }
-      }  
+
+        try {
+          const snapshot = await getDoc(doc(db, "autores", authorName));
+          return snapshot.exists()
+            ? { ...snapshot.data(), name: snapshot.data()?.name ?? authorName }
+            : { name: authorName, uri: fallbackUri, descripcion: "No hay información disponible", tipo: "Artista" };
+        } catch (error) {
+          console.log("Error obteniendo autor", authorName, error);
+          return { name: authorName, uri: fallbackUri, descripcion: "No hay información disponible", tipo: "Artista" };
+        }
+      }));
+
+      setArtistas(profiles);
     } catch(err){
       console.log(err)
-      console.log(" autor 3")
-      setArtista({
-        "name": artist,
-        "uri": "https://s1.ppllstatics.com/canarias7/www/multimedia/201704/14/media/cortadas/462076-1g_CSN462076_MG3928385--1248x702.jpg",
-        "descripcion": "No hay información disponible",
-        "tipo":"Artista",
-      })
+      setArtistas([]);
     }
   };
   
@@ -687,6 +665,7 @@ const like = () => {
             letra:letra,
             tipo:"Canción",
             autor:musica[1],
+            autores: normalizeAuthors(currentTrack?.autores ?? musica[1]),
             generos:musica[4], 
             dominantColor:dominant,
             dateU:Timestamp.now().toDate(),
@@ -773,7 +752,8 @@ const like = () => {
     // Ensure the track has the fields TrackPlayer expects (url, title, artist, artwork, id)
     const url = item.url ?? (Array.isArray(item.uri) ? item.uri[0] : item.uri) ?? item.audio ?? item.src ?? null;
     const title = item.title ?? item.name ?? '';
-    const artist = item.artist ?? item.autor ?? '';
+    const authors = normalizeAuthors(item.autores ?? item.autor ?? item.artist);
+    const artist = formatAuthors(authors);
     const artwork = item.artwork ?? item.img ?? item.art ?? undefined;
     const id = item.id ?? undefined;
     const out: AnyObject = {
@@ -781,6 +761,7 @@ const like = () => {
       url,
       title,
       artist,
+      autores: authors,
       artwork,
       // keep extra metadata
       ...item,
@@ -1080,6 +1061,7 @@ const getLikesPlaylist = async (playlist: string) => {
             img:musica[2],
             tipo:"Canción",
             autor:musica[1],
+            autores: normalizeAuthors(currentTrack?.autores ?? musica[1]),
             generos:musica[4],
             dominantColor:dominant,
             letra:letra, 
@@ -1134,6 +1116,7 @@ const getLikesPlaylist = async (playlist: string) => {
             img:musica[2],
             tipo:"Canción",
             autor:musica[1],
+            autores: normalizeAuthors(currentTrack?.autores ?? musica[1]),
             generos:musica[4],
             dominantColor:dominant,
             letra:letra, 
@@ -1484,56 +1467,57 @@ const getLikesPlaylist = async (playlist: string) => {
               
             ) : null}
 
-            {artista && artista.length !== 0 && artista.uri && (
-              <TouchableOpacity onPress={()=>{ router.push({
-              pathname: "/(screens)/Autor",
-                params: {
-                  nameA: currentTrack.artist,
-                }
-              })}}>
-              <Animated.View 
-                entering={FadeInDown.delay(500).duration(1000)}
-                style={{
-                  marginTop: 50, // Más espacio respecto a la letra
-                  marginBottom: 20,
-                  borderRadius: 20,
-                  marginHorizontal: 0,
-                  width:window.width-40,
-                  alignSelf: 'center',
-                }}>
-                {artista.uri && (
-                  <Image
-                    source={{ uri: artista.uri }}
-                    style={{ width: window.width-40, height: 250, borderTopLeftRadius: 20, borderTopRightRadius: 20, opacity:0.8 }}
-                    contentFit="cover"
-                  />
-                )}
-                <Text style={{
-                  fontSize: 17,
-                  fontWeight: 'bold',
-                  color: '#fff',
-                  marginTop: 10,
-                  marginLeft: 10,
-                  textAlign: 'center',
-                  paddingBottom: 5,
-                  position: 'absolute'
-                }}>
-                  Acerca del artista
-                </Text>
-
-                <View style={{padding:10, backgroundColor:"#232323", borderBottomLeftRadius: 20, borderBottomRightRadius: 20}}>
-                  <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600', marginBottom: 5 }}>
-                    {artista.name}
+            {artistas.map((artista, index) => (
+              <TouchableOpacity
+                key={`${artista.name ?? 'autor'}-${index}`}
+                onPress={() => router.push({
+                  pathname: "/(screens)/Autor",
+                  params: { nameA: String(artista.name ?? '') },
+                })}
+              >
+                <Animated.View
+                  entering={FadeInDown.delay(500 + index * 100).duration(1000)}
+                  style={{
+                    marginTop: 50,
+                    marginBottom: 20,
+                    borderRadius: 20,
+                    marginHorizontal: 0,
+                    width: window.width - 40,
+                    alignSelf: 'center',
+                  }}
+                >
+                  {artista.uri && (
+                    <Image
+                      source={{ uri: artista.uri }}
+                      style={{ width: window.width - 40, height: 250, borderTopLeftRadius: 20, borderTopRightRadius: 20, opacity: 0.8 }}
+                      contentFit="cover"
+                    />
+                  )}
+                  <Text style={{
+                    fontSize: 17,
+                    fontWeight: 'bold',
+                    color: '#fff',
+                    marginTop: 10,
+                    marginLeft: 10,
+                    textAlign: 'center',
+                    paddingBottom: 5,
+                    position: 'absolute'
+                  }}>
+                    Acerca del artista
                   </Text>
 
-                  <Text numberOfLines={3} style={{ color: '#ccc', fontSize: 14, marginBottom: 5 }}>
-                    {artista.descripcion}
-                  </Text>
-                </View>
-                
-              </Animated.View>
+                  <View style={{ padding: 10, backgroundColor: "#232323", borderBottomLeftRadius: 20, borderBottomRightRadius: 20 }}>
+                    <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600', marginBottom: 5 }}>
+                      {artista.name}
+                    </Text>
+
+                    <Text numberOfLines={3} style={{ color: '#ccc', fontSize: 14, marginBottom: 5 }}>
+                      {artista.descripcion}
+                    </Text>
+                  </View>
+                </Animated.View>
               </TouchableOpacity>
-            )}
+            ))}
           <View style={{marginTop:50}}>
           </View>
           </LinearGradient>
@@ -1777,7 +1761,7 @@ const getLikesPlaylist = async (playlist: string) => {
               }catch(err){console.log(err)}
             }} style={{paddingVertical:12,borderBottomWidth:1,borderBottomColor:'#222'}}>
               <Text style={{color:'white',fontSize:16}} numberOfLines={1}>{item.title ?? item.name}</Text>
-              <Text style={{color:'#aaa',fontSize:13}} numberOfLines={1}>{item.artist ?? item.autor}</Text>
+              <Text style={{color:'#aaa',fontSize:13}} numberOfLines={1}>{formatAuthors(item.autores ?? item.artist ?? item.autor)}</Text>
             </TouchableOpacity>
           )}
         />
