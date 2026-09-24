@@ -6,13 +6,13 @@ import { getAuth, signOut, updateProfile } from "firebase/auth";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Alert,
-    BackHandler,
-    Text,
-    TextInput,
-    ToastAndroid,
-    TouchableOpacity,
-    View
+  Alert,
+  BackHandler,
+  Text,
+  TextInput,
+  ToastAndroid,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { Icon } from 'react-native-elements';
 import { RadioButton, Switch } from 'react-native-paper';
@@ -296,7 +296,7 @@ export default function Settings() {
         <Text style={{ fontSize: 20, marginLeft: 5, height: 40, color: '#A7A7A7', alignItems: "center", alignContent: "center", alignSelf: "center", borderTopWidth: 1, borderColor: "gray" }}>Es todo por el momento</Text>
         </View>
         <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-        <Text style={{ fontSize: 10, height: 40, color: '#A7A7A7', alignItems: "center", alignContent: "center", alignSelf: "center" }}>Emperblack | v4.0.0  </Text>
+        <Text style={{ fontSize: 10, height: 40, color: '#A7A7A7', alignItems: "center", alignContent: "center", alignSelf: "center" }}>Emperblack | v4.5.0  </Text>
     </View>
 
     <BottomSheetModal

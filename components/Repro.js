@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  AppState,
-  Image,
-  Keyboard,
-  Text,
-  ToastAndroid,
-  TouchableOpacity,
-  View
+    AppState,
+    Image,
+    Keyboard,
+    Text,
+    ToastAndroid,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { Icon } from 'react-native-elements';
 
@@ -21,6 +21,8 @@ import TrackPlayer, { Event, State, useProgress } from 'react-native-track-playe
 import { db } from '../config/firebase';
 import { useApp } from '../context/AppContext';
 import { formatAuthors } from '../utils/authors';
+
+const APP_ICON = require('../assets/images/icon.png');
 
 export default function Repro() {
   const [iconLC, setIconLC] = useState("white");
@@ -473,7 +475,7 @@ const _playAndPause = async () => {
           <TouchableOpacity activeOpacity={0.7} onLongPress={()=>{reset()}} onPress={()=>router.push('/(screens)/ReproGrande')}  style={{ backgroundColor: dominantColor,borderRadius:7,width:"96%",alignSelf:"center",marginBottom:RFValue(22), height:RFValue(55)}}> 
         <View style={{flexDirection:"row", alignItems:"center",justifyContent:"space-between",width:"100%"}}> 
               <Image
-                source={{ uri: currentTrack.artwork }} 
+                source={currentTrack.artwork ? { uri: currentTrack.artwork } : APP_ICON}
                 style={{
                   width: RFValue(40),
                   height: RFValue(40),

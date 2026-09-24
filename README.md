@@ -19,7 +19,7 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
 GITHUB
 
    git add .
-   git commit -m "chore: add android prebuild folder"
+   git commit -m "4.5.0 fixed playlist lag"
    git push -u origin main
 
 

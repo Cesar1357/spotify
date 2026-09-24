@@ -20,7 +20,7 @@
         "backgroundColor": "#111111"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.cesar1357.SpotifyP",
+      "package": "com.cesar1357.Spotify",
       "runtimeVersion": "3.0.0"
     },
     "web": {

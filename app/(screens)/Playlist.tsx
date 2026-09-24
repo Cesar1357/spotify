@@ -17,7 +17,6 @@ import {
   Dimensions,
   FlatList,
   Keyboard,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -148,6 +147,7 @@ export default function Search() {
           return {
             id: index,
             url: urlFinal,
+            uri: item.uri,
             vid: Array.isArray(item.uri) ? item.uri[1] : null,
             title: item.name,
             artist: formatAuthors(item.autor ?? item.autores),
@@ -356,6 +356,7 @@ export default function Search() {
                 artist: authorText,
                 autores: authors,
                 artwork: img,
+                uri: uri,
                 dominantColor: dominant,
                 generos: generos,
                 letra: letra,
@@ -777,7 +778,7 @@ const renderItem = ({ item, index }: { item: any; index: number }) => {
 
   return (
     <TouchableOpacity style={{ padding: 8 }} onPress={() =>
-      change(item.url, item.title, item.artist, item.artwork, item.generos, item.letra, item.dominantColor, index)
+      change(item.uri ?? [item.url, item.vid], item.title, item.autores ?? item.artist, item.artwork, item.generos, item.letra, item.dominantColor, index)
     }>
       <View style={styles.box}>
         <Image
@@ -1153,9 +1154,8 @@ const activateA = async () => {
     }
   }
 
-  return (
-    <SafeAreaView style={styles.container}>
-    <ScrollView keyboardShouldPersistTaps={'always'} style={{}} stickyHeaderIndices={[1]}>
+  const playlistHeader = (
+    <>
     <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf:"center"}}>
       <Searchbar
           placeholder="¿Qué buscas?"
@@ -1216,79 +1216,46 @@ const activateA = async () => {
         </View>
       </View>
       
-      <View>
-      {internet ?
+    </>
+  );
+
+  const emptyPlaylist = lists.length === 0 ? (
+    <View style={styles.emptyState}>
+      <Text style={styles.emptyTitle}>¡No tienes canciones!</Text>
+      <Text style={styles.emptySubtitle}>Agrega algunas para llenarlo</Text>
+    </View>
+  ) : (
+    <View style={styles.emptyState}>
+      <Text style={styles.emptyTitle}>¡No encontramos esta canción!</Text>
+      <Text style={styles.emptySubtitle}>:(</Text>
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={styles.container}>
       <FlatList
-        style={{ marginTop: 10 }}
+        style={{ flex: 1 }}
         data={allSee}
-        renderItem={renderItem}
-        keyExtractor={(item, index) => String(item.id ?? item.title ?? index)}
-        showsVerticalScrollIndicator={true}
+        renderItem={internet ? renderItem : renderItem2}
+        ListHeaderComponent={playlistHeader}
+        keyExtractor={(item, index) => String(item.id ?? item.title ?? item.name ?? index)}
+        showsVerticalScrollIndicator
         indicatorStyle="white"
-        persistentScrollbar={true}
+        persistentScrollbar
         keyboardShouldPersistTaps="always"
         initialNumToRender={10}
         maxToRenderPerBatch={5}
         updateCellsBatchingPeriod={100}
         windowSize={5}
-        removeClippedSubviews={true}
-        getItemLayout={(data, index) => ({
-          length: 70,
-          offset: 70 * index,
-          index,
-        })}
-        scrollsToTop={false}
+        removeClippedSubviews
+        ListEmptyComponent={internet ? emptyPlaylist : (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyTitle}>¡No tienes canciones descargadas!</Text>
+            <Text style={styles.emptySubtitle}>Descarga algunas para llenarlo</Text>
+          </View>
+        )}
         ListFooterComponent={<View style={{ height: RFValue(200) }} />}
-        ListEmptyComponent={
-          lists.length === 0 ? (
-            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={styles.emptyTitle}>
-                ¡No tienes canciones!
-              </Text>
-              <Text style={styles.emptySubtitle}>
-                Agrega algunas para llenarlo
-              </Text>
-            </View>
-          ) : (
-            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={styles.emptyTitle}>
-                ¡No encontramos esta canción!
-              </Text>
-              <Text style={styles.emptySubtitle}>
-                :(
-              </Text>
-            </View>
-          )
-        }
       />
-      :
-      <FlatList
-        style={{ marginTop: 10}} 
-        data={allSee}
-        renderItem={renderItem2}
-        extraData={currentIndexRef}
-        showsVerticalScrollIndicator={true}
-        scrollsToTop={false}
-        indicatorStyle={'white'}
-        persistentScrollbar={true}
-        keyExtractor={(item, index) => String(item.id ?? item.name ?? index)}
-        keyboardShouldPersistTaps={'always'}
-        ListEmptyComponent={
-            <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-              <Text style={styles.emptyTitle}>
-                ¡No tienes canciones descargadas!
-              </Text>
-              <Text style={styles.emptySubtitle}>
-                Descarga algunas para llenarlo
-              </Text>
-            </View>
-        }
-        ListFooterComponent={
-          <View style={{height:RFValue(200)}}></View>
-        }
-      />}
-      </View>
-      </ScrollView>
       <BottomSheetModal
       ref={modalRefP}
       index={1}
@@ -1561,6 +1528,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginTop: 6,
     textAlign: 'center',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 260,
   },
   box: {
     backgroundColor: '#111111',

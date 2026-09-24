@@ -1441,7 +1441,8 @@ const getLikesPlaylist = async (playlist: string) => {
               </Animated.View>
               
             ) : null}
-
+            <View style={{marginTop:30,alignSelf:"center",width:window.width-40,backgroundColor:"#232323",borderRadius:20}}>
+            </View>
             {artistas.map((artista, index) => (
               <TouchableOpacity
                 key={`${artista.name ?? 'autor'}-${index}`}
@@ -1453,8 +1454,8 @@ const getLikesPlaylist = async (playlist: string) => {
                 <Animated.View
                   entering={FadeInDown.delay(500 + index * 100).duration(1000)}
                   style={{
-                    marginTop: 50,
-                    marginBottom: 20,
+                    marginTop: 20,
+                    marginBottom: 10,
                     borderRadius: 20,
                     marginHorizontal: 0,
                     width: window.width - 40,

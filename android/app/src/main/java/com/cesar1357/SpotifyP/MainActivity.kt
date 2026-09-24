@@ -1,4 +1,4 @@
-package com.cesar1357.SpotifyP
+package com.cesar1357.Spotify
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

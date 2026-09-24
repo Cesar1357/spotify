@@ -1,4 +1,4 @@
-package com.cesar1357.SpotifyP
+package com.cesar1357.Spotify
 
 import android.app.Application
 import android.content.res.Configuration

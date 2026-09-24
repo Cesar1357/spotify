@@ -43,6 +43,9 @@
 ## Fase 3: biblioteca, Playlist y acciones
 
 - Progreso: el encabezado de Playlist ahora muestra el total de canciones y sus controles tienen áreas táctiles y feedback más claros.
+- Progreso: Playlist conserva `vid` y `uri` al cargar canciones locales, por lo que el selector de video de ReproGrande funciona también desde playlists.
+- Progreso: Playlist conserva el `uri` original al construir sus canciones normalizadas; las filas ya no pierden `uri[1]` al reproducir desde una playlist.
+- Progreso: Playlist dejó de anidar un `FlatList` vertical dentro de un `ScrollView`; ahora usa una sola lista virtualizada para reducir el lag durante la reproducción.
 - Progreso: Search ahora muestra el total de resultados activos y sus filas tienen feedback táctil consistente.
 - Progreso: Search muestra tarjetas dinámicas de hasta quince géneros por defecto; el historial y resultados aparecen al enfocar el buscador.
 - Progreso: las tarjetas de género ahora se muestran en un grid vertical de dos columnas y la X del buscador devuelve el estado de exploración.
